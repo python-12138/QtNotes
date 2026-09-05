@@ -1,0 +1,9 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+npm-debug.log*
+
+# 本地开发记录与设计图（不推送到公开仓库）
+开发记录/
