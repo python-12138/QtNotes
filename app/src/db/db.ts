@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { Ledger, Transaction, Category, Account, AppSettings, TripRecord } from './types';
+import type { Ledger, Transaction, Category, Account, AppSettings, TripRecord } from '@shared/types';
 
 // 本地数据库封装（基于 IndexedDB）。Dexie 自动管理表结构与索引。
 export class BookkeepingDB extends Dexie {

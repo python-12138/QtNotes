@@ -30,8 +30,9 @@ public interface ISyncService
 }
 
 /// <summary>
-/// 单向镜像同步：手机端是唯一数据源，服务端数据库逐表按 Id 去重 upsert，
-/// 并删除手机端已不存在的记录（硬删除，等价于「服务端镜像手机端」）。
+/// 单向墓碑同步：手机端仍是唯一写源，但服务端不再硬删/清表。
+/// 存活行（DeletedAt 为空）按 Id 去重 upsert；墓碑行（DeletedAt 非空）仅对已存在的 Id 置软删标记。
+/// 服务端独有的行（如电脑端新增）与手机端空快照都不会被清除，从而保留电脑端数据。
 /// 幂等——重复同步结果一致，可放心重试。
 /// </summary>
 public sealed class SyncService : ISyncService
@@ -59,37 +60,39 @@ public sealed class SyncService : ISyncService
     {
         incoming ??= new List<TEntity>();
 
-        // 时间戳：记录仍存在于手机端（DeletedAt 置空）
-        foreach (var item in incoming)
+        // 拆分为「存活行」与「墓碑行」：软删行带 DeletedAt，服务端据此标记删除而非硬删
+        var alive = incoming.Where(x => x.DeletedAt == null).ToList();
+        var tombstones = incoming.Where(x => x.DeletedAt != null).ToList();
+
+        // 存活行：时间戳归一（UpdatedAt 服务端 touch，DeletedAt 置空）
+        foreach (var item in alive)
         {
             item.UpdatedAt = now;
             item.DeletedAt = null;
         }
 
-        var incomingIds = incoming.Select(x => x.Id).ToList();
-
-        // 空快照 = 手机端已无此表数据，清空该表
-        if (incomingIds.Count == 0)
-        {
-            await _db.Deleteable<TEntity>().ExecuteCommandAsync();
-            return 0;
-        }
-
         var existingIds = await _db.Queryable<TEntity>().Select(x => x.Id).ToListAsync();
 
-        // 新增 / 更新（按主键 Id 去重）
-        var toInsert = incoming.Where(x => !existingIds.Contains(x.Id)).ToList();
-        var toUpdate = incoming.Where(x => existingIds.Contains(x.Id)).ToList();
+        // 存活行按主键 Id 去重 upsert
+        var toInsert = alive.Where(x => !existingIds.Contains(x.Id)).ToList();
+        var toUpdate = alive.Where(x => existingIds.Contains(x.Id)).ToList();
         if (toInsert.Count > 0)
             await _db.Insertable(toInsert).ExecuteCommandAsync();
         if (toUpdate.Count > 0)
             await _db.Updateable(toUpdate).ExecuteCommandAsync();
 
-        // 删除手机端已删除、但服务端仍残留的记录（单向镜像）
-        var toDelete = existingIds.Where(id => !incomingIds.Contains(id)).ToList();
-        if (toDelete.Count > 0)
-            await _db.Deleteable<TEntity>().Where(x => toDelete.Contains(x.Id)).ExecuteCommandAsync();
+        // 墓碑行：仅对服务端已存在的 Id 置软删标记（不硬删、不插入新行）。
+        // 服务端独有的行（电脑端新增）与手机端空快照都不做任何处理，从而保留电脑端数据。
+        var tombstoneIds = tombstones.Select(x => x.Id).Where(existingIds.Contains).ToList();
+        if (tombstoneIds.Count > 0)
+        {
+            await _db.Updateable<TEntity>()
+                .SetColumns(x => x.DeletedAt == now)
+                .SetColumns(x => x.UpdatedAt == now)
+                .Where(x => tombstoneIds.Contains(x.Id))
+                .ExecuteCommandAsync();
+        }
 
-        return incoming.Count;
+        return alive.Count + tombstones.Count;
     }
 }

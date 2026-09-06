@@ -1,18 +1,16 @@
 <script setup lang="ts">
 // 根组件：初始化 + 标签页切换 + 记一笔覆盖层 + 账本切换
 import { onMounted, ref } from 'vue';
-import { seedIfEmpty } from './db/seed';
-import { initTheme } from './utils/theme';
-import { initCurrentLedger } from './store/currentLedger';
-import { ensureSettings } from './store/useSettings';
-import type { Tab } from './types';
-import BottomNav from './components/BottomNav.vue';
-import Home from './pages/Home.vue';
-import Records from './pages/Records.vue';
-import Stats from './pages/Stats.vue';
-import Settings from './pages/Settings.vue';
-import Add from './pages/Add.vue';
-import LedgerSwitcher from './components/LedgerSwitcher.vue';
+import { getDataProvider } from '@shared/data/provider';
+import { initTheme } from '@shared/utils/theme';
+import type { Tab } from '@shared/types';
+import BottomNav from '@shared/components/BottomNav.vue';
+import Home from '@shared/pages/Home.vue';
+import Records from '@shared/pages/Records.vue';
+import Stats from '@shared/pages/Stats.vue';
+import Settings from '@shared/pages/Settings.vue';
+import Add from '@shared/pages/Add.vue';
+import LedgerSwitcher from '@shared/components/LedgerSwitcher.vue';
 
 const tab = ref<Tab>('home');
 const showAdd = ref(false);
@@ -22,9 +20,7 @@ const ready = ref(false);
 onMounted(async () => {
   initTheme();
   try {
-    await seedIfEmpty();
-    await ensureSettings();
-    await initCurrentLedger();
+    await getDataProvider().init();
   } catch (e) {
     console.error('初始化失败', e);
   } finally {

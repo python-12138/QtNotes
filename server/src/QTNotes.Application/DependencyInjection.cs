@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using QTNotes.Application.Query;
 using QTNotes.Application.Sync;
+using QTNotes.Application.Write;
 
 namespace QTNotes.Application;
 
@@ -10,6 +11,7 @@ public static class DependencyInjection
     {
         services.AddScoped<ISyncService, SyncService>();
         services.AddScoped<IQueryService, QueryService>();
+        services.AddScoped<IWriteService, WriteService>();
         return services;
     }
 }

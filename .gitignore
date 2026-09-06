@@ -12,6 +12,9 @@ npm-debug.log*
 [Bb]in/
 [Oo]bj/
 
+# Visual Studio 本地缓存
+.vs/
+
 # web 构建产物（输出到 server 的 wwwroot）
 server/src/QTNotes.Api/wwwroot/
 

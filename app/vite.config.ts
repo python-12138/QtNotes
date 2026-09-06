@@ -1,10 +1,23 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import { VitePWA } from 'vite-plugin-pwa';
+import { fileURLToPath, URL } from 'node:url';
 
 // base 使用相对路径 './'，这样部署到 GitHub Pages 的 /仓库名/ 子路径时无需改配置。
 export default defineConfig({
   base: './',
+  resolve: {
+    alias: {
+      // 复用上级目录 shared/ 的领域逻辑与 UI 源码
+      '@shared': fileURLToPath(new URL('../shared/src', import.meta.url)),
+    },
+  },
+  server: {
+    fs: {
+      // 允许 dev server 访问上级目录的 shared 源码
+      allow: ['..'],
+    },
+  },
   plugins: [
     vue(),
     VitePWA({
