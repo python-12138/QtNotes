@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/QTNotes.Api/QTNotes.Api.csproj" />
+    <Project Path="src/QTNotes.Application/QTNotes.Application.csproj" />
+    <Project Path="src/QTNotes.Domain/QTNotes.Domain.csproj" />
+    <Project Path="src/QTNotes.Infrastructure/QTNotes.Infrastructure.csproj" />
+  </Folder>
+</Solution>

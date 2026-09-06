@@ -7,3 +7,13 @@ npm-debug.log*
 
 # 本地开发记录与设计图（不推送到公开仓库）
 开发记录/
+
+# C# / server 构建产物
+[Bb]in/
+[Oo]bj/
+
+# web 构建产物（输出到 server 的 wwwroot）
+server/src/QTNotes.Api/wwwroot/
+
+# 含密码的连接串（模板见 appsettings.Example.json）
+server/src/QTNotes.Api/appsettings.json
