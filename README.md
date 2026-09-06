@@ -40,13 +40,15 @@ npm run icons    # 重新生成 PWA 图标（需要时）
 
 ## 部署到 GitHub Pages（免费）
 
-1. 在 GitHub 新建一个**公开**仓库（免费 Pages 仅公开仓库可用；私有仓库需 GitHub Pro）。
-2. 将本项目（含 `package-lock.json`）推送到该仓库的 `main` 分支。
-3. 仓库 **Settings → Pages → Source** 选择 `GitHub Actions`。
-4. 推送后，[.github/workflows/deploy.yml](.github/workflows/deploy.yml) 会自动构建并发布。
-5. 访问 `https://<用户名>.github.io/<仓库名>/`。
+一键脚本部署，完整教程见 [DEPLOY.md](DEPLOY.md)。
 
-> `vite.config.ts` 中 `base: './'` 使用相对路径，部署到任意子路径都无需改配置。
+```bash
+bash deploy-pwa.sh
+```
+
+访问 `https://<用户名>.github.io/<仓库名>/`。
+
+> `app/vite.config.ts` 中 `base: './'` 使用相对路径，部署到任意子路径都无需改配置。
 
 ## 在 iPhone 上使用
 

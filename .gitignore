@@ -20,3 +20,6 @@ server/src/QTNotes.Api/wwwroot/
 
 # 含密码的连接串（模板见 appsettings.Example.json）
 server/src/QTNotes.Api/appsettings.json
+
+# PWA 部署脚本的临时 worktree
+.gh-pages-worktree/
