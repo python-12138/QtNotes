@@ -28,16 +28,6 @@ const emit = defineEmits<{ (e: 'change', tab: Tab): void; (e: 'add'): void }>();
       <span class="nav-label">明细</span>
     </button>
 
-    <button
-      type="button"
-      class="nav-item"
-      :class="{ active: active === 'summary' }"
-      @click="emit('change', 'summary')"
-    >
-      <span class="nav-icon">🗓️</span>
-      <span class="nav-label">汇总</span>
-    </button>
-
     <button type="button" class="nav-add" aria-label="记一笔" @click="emit('add')">＋</button>
 
     <button

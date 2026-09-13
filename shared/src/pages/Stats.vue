@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// 统计：收支汇总 + 分类占比饼图 + 每日趋势；车辆账本额外显示油费综合 + 每次行驶 + 图表标签页
+// 统计：收支汇总 + 分类占比饼图 + 收支趋势；顶部支持按日期区间筛选。
+// 车辆账本额外显示油费综合 + 每次行驶 + 图表标签页。
 import { computed, ref } from 'vue';
 import dayjs from 'dayjs';
 import VChart from 'vue-echarts';
@@ -10,7 +11,6 @@ import { useCategories } from '../store/useCategories';
 import { useCurrentLedger } from '../store/currentLedger';
 import { useSettings } from '../store/useSettings';
 import { formatMoney } from '../utils/money';
-import { monthLabel, shiftMonth, currentMonthStr } from '../utils/date';
 import { summarizeFuel, summarizeTrips, formatConsumption, formatCostPerKm } from '../utils/vehicle';
 import type { TxType } from '../types';
 
@@ -19,18 +19,69 @@ const transactions = useTransactions();
 const trips = useTrips();
 const categories = useCategories();
 const settings = useSettings();
-const month = ref(currentMonthStr());
 const type = ref<TxType>('expense');
 
 const isVehicle = computed(() => ledger.value?.type === 'vehicle');
 
-const monthTx = computed(() => transactions.value.filter((t) => t.date.startsWith(month.value)));
+// —— 日期区间筛选（默认本月） ——
+const startDate = ref(dayjs().startOf('month').format('YYYY-MM-DD'));
+const endDate = ref(dayjs().format('YYYY-MM-DD'));
+
+type Preset = 'thisMonth' | 'lastMonth' | 'last7' | 'last30' | 'all';
+
+function setPreset(name: Preset) {
+  const now = dayjs();
+  switch (name) {
+    case 'thisMonth':
+      startDate.value = now.startOf('month').format('YYYY-MM-DD');
+      endDate.value = now.format('YYYY-MM-DD');
+      break;
+    case 'lastMonth':
+      startDate.value = now.subtract(1, 'month').startOf('month').format('YYYY-MM-DD');
+      endDate.value = now.subtract(1, 'month').endOf('month').format('YYYY-MM-DD');
+      break;
+    case 'last7':
+      startDate.value = now.subtract(6, 'day').format('YYYY-MM-DD');
+      endDate.value = now.format('YYYY-MM-DD');
+      break;
+    case 'last30':
+      startDate.value = now.subtract(29, 'day').format('YYYY-MM-DD');
+      endDate.value = now.format('YYYY-MM-DD');
+      break;
+    case 'all':
+      startDate.value = '';
+      endDate.value = '';
+      break;
+  }
+}
+
+// 起止日期（填反自动纠正）；都为空表示「全部」
+const range = computed(() => {
+  let s = startDate.value;
+  let e = endDate.value;
+  if (s && e && s > e) {
+    const t = s;
+    s = e;
+    e = t;
+  }
+  return { s, e };
+});
+
+function inRange(date: string): boolean {
+  const { s, e } = range.value;
+  if (s && date < s) return false;
+  if (e && date > e) return false;
+  return true;
+}
+
+const rangeTx = computed(() => transactions.value.filter((t) => inRange(t.date)));
+const rangeTrips = computed(() => trips.value.filter((t) => inRange(t.date)));
 
 // 收支合计
 const totals = computed(() => {
   let income = 0;
   let expense = 0;
-  for (const t of monthTx.value) {
+  for (const t of rangeTx.value) {
     if (t.type === 'income') income += t.amount;
     else expense += t.amount;
   }
@@ -40,7 +91,7 @@ const totals = computed(() => {
 // —— 油费综合：累计油钱 / 总里程 / 每公里成本 / 价格反推平均油耗 ——
 const fuelCategoryIds = computed(() => categories.value.filter((c) => c.isFuel).map((c) => c.id));
 const fuelRecordsAsc = computed(() =>
-  transactions.value
+  rangeTx.value
     .filter((t) => fuelCategoryIds.value.includes(t.categoryId))
     .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt)
     .map((t) => ({ amount: t.amount, km: t.km })),
@@ -60,7 +111,7 @@ const fuelLitersText = computed(() =>
 
 // —— 每次行驶：累计行驶里程 / 累计行驶升数 / 平均油耗 / 每公里使用成本 ——
 const tripsAsc = computed(() =>
-  [...trips.value].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt),
+  [...rangeTrips.value].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt),
 );
 const tripSummary = computed(() => summarizeTrips(tripsAsc.value, unitPrice.value));
 
@@ -76,7 +127,7 @@ const chartTab = ref<'fuel' | 'mileage'>('fuel');
 
 const monthlyFuel = computed(() => {
   const map = new Map<string, number>();
-  for (const t of transactions.value) {
+  for (const t of rangeTx.value) {
     if (!fuelCategoryIds.value.includes(t.categoryId)) continue;
     const m = t.date.slice(0, 7);
     map.set(m, (map.get(m) ?? 0) + t.amount);
@@ -129,7 +180,7 @@ const dailyMileageOption = computed<any>(() => ({
 // 分类占比数据
 const pieData = computed(() => {
   const byCat = new Map<string, number>();
-  for (const t of monthTx.value) {
+  for (const t of rangeTx.value) {
     if (t.type !== type.value) continue;
     byCat.set(t.categoryId, (byCat.get(t.categoryId) ?? 0) + t.amount);
   }
@@ -152,25 +203,46 @@ const pieOption = computed<any>(() => ({
   ],
 }));
 
-// 每日趋势数据
+// 收支趋势：起止都填且不超过 62 天 → 按天；否则（全部 / 跨度太大）→ 按月
 const trendData = computed(() => {
-  const days = dayjs(`${month.value}-01`).daysInMonth();
-  const data: { day: string; value: number }[] = [];
-  for (let d = 1; d <= days; d++) {
-    const date = `${month.value}-${String(d).padStart(2, '0')}`;
-    let value = 0;
-    for (const t of monthTx.value) {
-      if (t.type === type.value && t.date === date) value += t.amount;
+  const { s, e } = range.value;
+  const data: { label: string; value: number }[] = [];
+  if (s && e && dayjs(e).diff(dayjs(s), 'day') + 1 <= 62) {
+    let cur = dayjs(s);
+    const stop = dayjs(e);
+    while (cur.isBefore(stop) || cur.isSame(stop, 'day')) {
+      const date = cur.format('YYYY-MM-DD');
+      let value = 0;
+      for (const t of rangeTx.value) {
+        if (t.type === type.value && t.date === date) value += t.amount;
+      }
+      data.push({ label: date.slice(5), value });
+      cur = cur.add(1, 'day');
     }
-    data.push({ day: String(d), value });
+  } else {
+    const map = new Map<string, number>();
+    for (const t of rangeTx.value) {
+      if (t.type !== type.value) continue;
+      const m = t.date.slice(0, 7);
+      map.set(m, (map.get(m) ?? 0) + t.amount);
+    }
+    for (const [m, value] of Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
+      data.push({ label: m, value });
+    }
   }
   return data;
+});
+
+const trendTitle = computed(() => {
+  const { s, e } = range.value;
+  const daily = !!s && !!e && dayjs(e).diff(dayjs(s), 'day') + 1 <= 62;
+  return `${daily ? '每日' : '每月'}${type.value === 'expense' ? '支出' : '收入'}趋势`;
 });
 
 const barOption = computed<any>(() => ({
   tooltip: { trigger: 'axis', valueFormatter: (v: number) => '¥' + formatMoney(v) },
   grid: { left: 42, right: 12, top: 16, bottom: 24 },
-  xAxis: { type: 'category', data: trendData.value.map((d) => d.day), axisLabel: { fontSize: 10 } },
+  xAxis: { type: 'category', data: trendData.value.map((d) => d.label), axisLabel: { fontSize: 10 } },
   yAxis: { type: 'value', axisLabel: { fontSize: 10, formatter: (v: number) => String(v / 100) } },
   series: [
     {
@@ -180,15 +252,33 @@ const barOption = computed<any>(() => ({
     },
   ],
 }));
+
+const presets: { key: Preset; label: string }[] = [
+  { key: 'thisMonth', label: '本月' },
+  { key: 'lastMonth', label: '上月' },
+  { key: 'last7', label: '近7天' },
+  { key: 'last30', label: '近30天' },
+  { key: 'all', label: '全部' },
+];
 </script>
 
 <template>
   <div class="page stats">
     <header class="page-header">
-      <button type="button" class="icon-btn" @click="month = shiftMonth(month, -1)">‹</button>
-      <h1>{{ monthLabel(month) }}</h1>
-      <button type="button" class="icon-btn" @click="month = shiftMonth(month, 1)">›</button>
+      <h1>统计</h1>
     </header>
+
+    <!-- 日期区间筛选 -->
+    <div class="range-bar">
+      <input v-model="startDate" type="date" class="text-input" />
+      <span class="range-sep">~</span>
+      <input v-model="endDate" type="date" class="text-input" />
+    </div>
+    <div class="filter-tabs">
+      <button v-for="p in presets" :key="p.key" type="button" @click="setPreset(p.key)">
+        {{ p.label }}
+      </button>
+    </div>
 
     <!-- 车辆账本：油费 · 综合 -->
     <div v-if="isVehicle" class="fuel-summary">
@@ -273,7 +363,7 @@ const barOption = computed<any>(() => ({
 
       <div class="card">
         <div class="card-head">
-          <span class="card-title">每日{{ type === 'expense' ? '支出' : '收入' }}趋势</span>
+          <span class="card-title">{{ trendTitle }}</span>
         </div>
         <VChart class="chart-box" :option="barOption" autoresize />
       </div>

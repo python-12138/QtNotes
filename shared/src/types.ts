@@ -8,7 +8,7 @@ export type TxType = 'income' | 'expense';
 export type LedgerType = 'general' | 'vehicle';
 
 /** 导航标签页 */
-export type Tab = 'home' | 'records' | 'summary' | 'stats' | 'settings';
+export type Tab = 'home' | 'records' | 'stats' | 'settings';
 
 /** 账本（一本账一个独立记账空间） */
 export interface Ledger {
