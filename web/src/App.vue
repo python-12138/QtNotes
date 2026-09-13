@@ -7,6 +7,7 @@ import type { Tab } from '@shared/types';
 import SideNav from './components/SideNav.vue';
 import Home from '@shared/pages/Home.vue';
 import Records from '@shared/pages/Records.vue';
+import Summary from '@shared/pages/Summary.vue';
 import Stats from '@shared/pages/Stats.vue';
 import Settings from '@shared/pages/Settings.vue';
 import Add from '@shared/pages/Add.vue';
@@ -42,6 +43,7 @@ onMounted(async () => {
       <template v-else>
         <Home v-if="tab === 'home'" @open-ledger="showLedger = true" />
         <Records v-else-if="tab === 'records'" />
+        <Summary v-else-if="tab === 'summary'" />
         <Stats v-else-if="tab === 'stats'" />
         <Settings v-else />
       </template>

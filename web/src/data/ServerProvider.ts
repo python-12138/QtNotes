@@ -200,6 +200,9 @@ export class ServerProvider implements DataProvider {
     });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     if (resp.status === 204) return undefined as T;
-    return (await resp.json()) as T;
+    // 空响应体（如 /api/settings 无设置行时服务端返回 200 空 body）按 undefined 处理，避免 resp.json() 抛错
+    const text = await resp.text();
+    if (!text) return undefined as T;
+    return JSON.parse(text) as T;
   }
 }

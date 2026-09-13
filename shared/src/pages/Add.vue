@@ -13,7 +13,6 @@ import { todayStr } from '../utils/date';
 import { uid } from '../utils/id';
 import { FUEL_TYPE_OPTIONS } from '../presets';
 import type { TxType } from '../types';
-import AmountKeypad from '../components/AmountKeypad.vue';
 import CategoryPicker from '../components/CategoryPicker.vue';
 import OilConfigModal from '../components/OilConfigModal.vue';
 
@@ -272,10 +271,6 @@ function save() {
           <label>备注</label>
           <input v-model="note" type="text" class="text-input" placeholder="添加备注（可选）" />
         </div>
-      </div>
-
-      <div class="add-keypad">
-        <AmountKeypad v-model="amountStr" />
       </div>
     </template>
 

@@ -28,6 +28,14 @@ const emit = defineEmits<{ (e: 'change', tab: Tab): void; (e: 'add'): void }>();
     <button
       type="button"
       class="side-item"
+      :class="{ active: active === 'summary' }"
+      @click="emit('change', 'summary')"
+    >
+      <span class="side-icon">🗓️</span><span>汇总</span>
+    </button>
+    <button
+      type="button"
+      class="side-item"
       :class="{ active: active === 'stats' }"
       @click="emit('change', 'stats')"
     >

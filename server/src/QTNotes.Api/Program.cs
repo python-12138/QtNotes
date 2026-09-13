@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using SqlSugar;
 using QTNotes.Application;
 using QTNotes.Application.Query;
@@ -49,8 +50,22 @@ using (var scope = app.Services.CreateScope())
 app.UseCors("allowAll");
 
 // —— 同步（写）：手机端 → 服务端，墓碑同步 ——
-app.MapPost("/api/sync", async (SyncPayload payload, ISyncService sync) =>
-    Results.Ok(await sync.MirrorAsync(payload)));
+// 失败时返回真实错误信息（而非笼统的 500），便于手机端定位是「数据库没连上」还是「网络不通」。
+app.MapPost("/api/sync", async (SyncPayload payload, ISyncService sync, ILogger<Program> logger) =>
+{
+    try
+    {
+        var result = await sync.MirrorAsync(payload);
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "同步失败");
+        return Results.Json(
+            new { error = ex.Message },
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+});
 
 // —— 反向通道预留：手机端从服务端拉取变更（本期仅占位，返回 501，供未来双向同步拓展） ——
 app.MapGet("/api/sync/changes", (long? since) => Results.StatusCode(501));
@@ -154,7 +169,28 @@ app.MapGet("/api/trips", (string? ledgerId, IQueryService q) => q.GetTripsAsync(
 app.MapGet("/api/categories", (string? ledgerId, IQueryService q) => q.GetCategoriesAsync(ledgerId));
 app.MapGet("/api/accounts", (string? ledgerId, IQueryService q) => q.GetAccountsAsync(ledgerId));
 app.MapGet("/api/settings", async (IQueryService q) => Results.Ok(await q.GetSettingsAsync()));
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok", time = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }));
+// 健康检查：真正检测数据库连通性，便于一眼判断是数据库问题还是网络问题。
+app.MapGet("/api/health", async (ISqlSugarClient db) =>
+{
+    var dbOk = false;
+    string? dbError = null;
+    try
+    {
+        db.Ado.CheckConnection(); // 连接失败会抛异常
+        dbOk = true;
+    }
+    catch (Exception ex)
+    {
+        dbError = ex.Message;
+    }
+    return Results.Json(new
+    {
+        status = dbOk ? "ok" : "degraded",
+        db = dbOk,
+        dbError,
+        time = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+    });
+});
 
 // 托管电脑端查看 UI（web/ 构建产物放在 wwwroot）
 app.UseDefaultFiles();

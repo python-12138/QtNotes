@@ -195,12 +195,39 @@ export class DexieProvider implements DataProvider {
     const base = (localStorage.getItem(SYNC_SERVER_KEY) ?? '').trim().replace(/\/+$/, '');
     if (!base) throw new Error('未配置电脑端服务地址');
     const payload = await this.exportAll();
-    const resp = await fetch(`${base}/api/sync`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+    // 15 秒超时：连不上时明确提示，而不是一直卡住
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    let resp: Response;
+    try {
+      resp = await fetch(`${base}/api/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+    } catch (e) {
+      throw new Error(
+        controller.signal.aborted
+          ? '连接超时：请确认手机与电脑在同一局域网、且电脑端服务已启动'
+          : '网络错误：无法连接到电脑端服务',
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (!resp.ok) {
+      // 优先显示服务端返回的真实错误（如「无法连接 MySQL」），否则回退为 HTTP 状态码
+      let detail = '';
+      try {
+        const data = (await resp.json()) as { error?: string };
+        detail = data?.error ?? '';
+      } catch {
+        // 响应体不是 JSON，忽略
+      }
+      throw new Error(detail || 'HTTP ' + resp.status);
+    }
     const r = await resp.json();
     return {
       ledgers: r.ledgers ?? 0,

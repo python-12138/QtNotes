@@ -7,8 +7,8 @@ export type TxType = 'income' | 'expense';
 /** 账本类型：general 普通账本 / vehicle 用车费用 */
 export type LedgerType = 'general' | 'vehicle';
 
-/** 底部导航的四个标签页 */
-export type Tab = 'home' | 'records' | 'stats' | 'settings';
+/** 导航标签页 */
+export type Tab = 'home' | 'records' | 'summary' | 'stats' | 'settings';
 
 /** 账本（一本账一个独立记账空间） */
 export interface Ledger {

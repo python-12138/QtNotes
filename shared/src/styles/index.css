@@ -7,8 +7,6 @@
   --primary: #22c55e;
   --income: #16a34a;
   --expense: #f43f5e;
-  --keypad-bg: #ffffff;
-  --keypad-active: #e5e7eb;
   --nav-bg: #ffffff;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -20,8 +18,6 @@
   --text: #e5e7eb;
   --text-secondary: #9ca3af;
   --border: #2a2e35;
-  --keypad-bg: #1e2126;
-  --keypad-active: #31363f;
   --nav-bg: #1a1d22;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
@@ -461,40 +457,6 @@ body {
   background: rgba(34, 197, 94, 0.08);
 }
 
-.add-keypad {
-  background: var(--keypad-bg);
-  border-top: 1px solid var(--border);
-  padding-bottom: var(--safe-bottom);
-}
-
-.keypad {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1px;
-  background: var(--border);
-}
-
-.keypad-key {
-  height: 56px;
-  font-size: 22px;
-  background: var(--keypad-bg);
-  border: none;
-  color: var(--text);
-  cursor: pointer;
-  user-select: none;
-  transition: background-color 0.12s, transform 0.12s;
-}
-
-.keypad-key:active {
-  background: var(--keypad-active);
-  transform: scale(0.96);
-}
-
-.keypad-key-del {
-  font-size: 20px;
-  color: var(--text-secondary);
-}
-
 /* 分类选择 */
 .category-grid {
   display: grid;
@@ -568,6 +530,82 @@ body {
 .records-summary b {
   font-weight: 600;
   margin-left: 4px;
+}
+
+/* 按日期汇总 */
+.range-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 16px;
+}
+
+.range-bar .text-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.range-sep {
+  color: var(--text-secondary);
+}
+
+.summary-table {
+  margin: 8px 16px;
+  padding: 4px 0;
+  overflow: hidden;
+}
+
+.summary-head,
+.summary-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  align-items: center;
+  padding: 10px 14px;
+  font-size: 14px;
+}
+
+.summary-head {
+  color: var(--text-secondary);
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.summary-head span {
+  text-align: right;
+}
+
+.summary-head span:first-child {
+  text-align: left;
+}
+
+.summary-row {
+  border-bottom: 1px solid var(--border);
+}
+
+.summary-row:last-child {
+  border-bottom: none;
+}
+
+.summary-row span,
+.summary-row b {
+  text-align: right;
+  font-weight: 400;
+}
+
+.summary-row b {
+  font-weight: 600;
+}
+
+.summary-date {
+  text-align: left !important;
+  color: var(--text);
+}
+
+.summary-date em {
+  font-style: normal;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-left: 6px;
 }
 
 .filter-tabs {
