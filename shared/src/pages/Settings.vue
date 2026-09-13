@@ -11,8 +11,11 @@ import { ensureSettings } from '../store/useSettings';
 import { uid } from '../utils/id';
 import { getTheme, applyTheme, type Theme } from '../utils/theme';
 import type { TxType } from '../types';
+import type { SyncSnapshot } from '../data/types';
+import { diffCandidates, mergeSnapshots } from '../utils/importDiff';
 import CategoryForm from '../components/CategoryForm.vue';
 import AccountForm from '../components/AccountForm.vue';
+import ImportConfirmModal from '../components/ImportConfirmModal.vue';
 
 const categories = useCategories();
 const accounts = useAccounts();
@@ -24,6 +27,10 @@ const theme = ref<Theme>(getTheme());
 const showCatForm = ref(false);
 const showAccountForm = ref(false);
 const fileInputRef = ref<HTMLInputElement | null>(null);
+const importFileRef = ref<HTMLInputElement | null>(null);
+const showImportConfirm = ref(false);
+const pendingSnap = ref<SyncSnapshot | null>(null);
+const pendingCandidates = ref<SyncSnapshot | null>(null);
 
 const typeCategories = computed(() => categories.value.filter((c) => c.type === catType.value));
 
@@ -114,41 +121,94 @@ async function exportData() {
   URL.revokeObjectURL(url);
 }
 
-function onImportFile(file: File) {
-  const reader = new FileReader();
-  reader.onload = async () => {
-    try {
-      const data = JSON.parse(String(reader.result));
-      if (
-        !Array.isArray(data.ledgers) ||
-        !Array.isArray(data.transactions) ||
-        !Array.isArray(data.categories) ||
-        !Array.isArray(data.accounts)
-      ) {
-        throw new Error('文件格式不正确');
+// 读文件并校验，返回 6 张表快照；失败或格式错误时 alert 并返回 null
+function readSnapshot(file: File): Promise<SyncSnapshot | null> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(String(reader.result));
+        if (
+          !Array.isArray(data.ledgers) ||
+          !Array.isArray(data.transactions) ||
+          !Array.isArray(data.categories) ||
+          !Array.isArray(data.accounts)
+        ) {
+          throw new Error('文件格式不正确');
+        }
+        resolve({
+          ledgers: data.ledgers,
+          transactions: data.transactions,
+          categories: data.categories,
+          accounts: data.accounts,
+          trips: Array.isArray(data.trips) ? data.trips : [],
+          settings: Array.isArray(data.settings) ? data.settings : [],
+        });
+      } catch (e) {
+        alert('导入失败：' + (e instanceof Error ? e.message : '未知错误'));
+        resolve(null);
       }
-      if (!confirm('导入将覆盖当前所有数据，确定继续？')) return;
-      await getDataProvider().importAll({
-        ledgers: data.ledgers,
-        transactions: data.transactions,
-        categories: data.categories,
-        accounts: data.accounts,
-        trips: Array.isArray(data.trips) ? data.trips : [],
-        settings: Array.isArray(data.settings) ? data.settings : [],
-      });
-      await ensureSettings();
-      // 恢复当前账本
-      const saved = currentLedgerId.value;
-      const list = await getDataProvider().listLedgers();
-      if (!list.some((l) => l.id === saved)) {
-        setCurrentLedger(list[0]?.id ?? '');
-      }
-      alert('导入成功');
-    } catch (e) {
-      alert('导入失败：' + (e instanceof Error ? e.message : '未知错误'));
+    };
+    reader.onerror = () => {
+      alert('读取文件失败');
+      resolve(null);
+    };
+    reader.readAsText(file);
+  });
+}
+
+// 导入后的收尾：确保设置存在、恢复当前账本、提示成功
+async function doImport(snap: SyncSnapshot) {
+  try {
+    await getDataProvider().importAll(snap);
+    await ensureSettings();
+    const saved = currentLedgerId.value;
+    const list = await getDataProvider().listLedgers();
+    if (!list.some((l) => l.id === saved)) {
+      setCurrentLedger(list[0]?.id ?? '');
     }
-  };
-  reader.readAsText(file);
+    alert('导入成功');
+  } catch (e) {
+    alert('导入失败：' + (e instanceof Error ? e.message : '未知错误'));
+  }
+}
+
+async function onImportFile(file: File) {
+  const snap = await readSnapshot(file);
+  if (!snap) return;
+
+  if (caps.fileImport) {
+    // 电脑端：对比现状，行级勾选确认要删除的数据
+    const current = await getDataProvider().exportAll();
+    const candidates = diffCandidates(current, snap);
+    const hasCandidates = Object.values(candidates).some((arr) => arr.length > 0);
+    if (!hasCandidates) {
+      await doImport(snap);
+      return;
+    }
+    pendingSnap.value = snap;
+    pendingCandidates.value = candidates;
+    showImportConfirm.value = true;
+  } else {
+    // 手机端：确认后覆盖本机
+    if (!confirm('导入将覆盖当前所有数据，确定继续？')) return;
+    await doImport(snap);
+  }
+}
+
+function onConfirmImport(retained: SyncSnapshot) {
+  showImportConfirm.value = false;
+  const base = pendingSnap.value;
+  if (!base) return;
+  pendingSnap.value = null;
+  pendingCandidates.value = null;
+  doImport(mergeSnapshots(base, retained));
+}
+
+function onCancelImport() {
+  showImportConfirm.value = false;
+  pendingSnap.value = null;
+  pendingCandidates.value = null;
 }
 
 // —— 同步到电脑（单向备份：手机 → 电脑端服务）——
@@ -249,6 +309,21 @@ async function syncToServer() {
       />
     </div>
 
+    <div v-if="caps.fileImport" class="card">
+      <div class="section-title">从文件导入</div>
+      <p class="hint">手机端「导出数据」得到 JSON 文件，传到电脑后在此导入，服务端数据将与手机完全一致（覆盖当前数据）。</p>
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" @click="importFileRef?.click()">导入 JSON 文件</button>
+      </div>
+      <input
+        ref="importFileRef"
+        type="file"
+        accept="application/json,.json"
+        style="display: none"
+        @change="(e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) onImportFile(f); (e.target as HTMLInputElement).value = ''; }"
+      />
+    </div>
+
     <div class="card about">
       <div class="section-title">关于</div>
       <p class="hint">记账本 · 纯本地记账 PWA</p>
@@ -257,5 +332,11 @@ async function syncToServer() {
 
     <CategoryForm v-if="showCatForm" :type="catType" @cancel="showCatForm = false" @save="addCategory" />
     <AccountForm v-if="showAccountForm" @cancel="showAccountForm = false" @save="addAccount" />
+    <ImportConfirmModal
+      v-if="showImportConfirm && pendingCandidates"
+      :candidates="pendingCandidates"
+      @confirm="onConfirmImport"
+      @cancel="onCancelImport"
+    />
   </div>
 </template>

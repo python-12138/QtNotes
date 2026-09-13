@@ -67,6 +67,24 @@ app.MapPost("/api/sync", async (SyncPayload payload, ISyncService sync, ILogger<
     }
 });
 
+// —— 备份文件导入（电脑端）：完全覆盖，达成与手机端一致 ——
+// 手机「导出数据」得到 JSON 文件，电脑端「从文件导入」走此接口（硬删重建，非墓碑合并）。
+app.MapPost("/api/import", async (SyncPayload payload, ISyncService sync, ILogger<Program> logger) =>
+{
+    try
+    {
+        var result = await sync.ReplaceAsync(payload);
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "导入失败");
+        return Results.Json(
+            new { error = ex.Message },
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+});
+
 // —— 反向通道预留：手机端从服务端拉取变更（本期仅占位，返回 501，供未来双向同步拓展） ——
 app.MapGet("/api/sync/changes", (long? since) => Results.StatusCode(501));
 

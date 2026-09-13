@@ -21,7 +21,7 @@ import type {
 } from '@shared/types';
 
 export class DexieProvider implements DataProvider {
-  readonly capabilities = { syncToServer: true, localBackup: true };
+  readonly capabilities = { syncToServer: true, localBackup: true, fileImport: false };
 
   async init(): Promise<void> {
     await this.seedIfEmpty();

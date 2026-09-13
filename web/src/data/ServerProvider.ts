@@ -19,7 +19,7 @@ import type {
 } from '@shared/types';
 
 export class ServerProvider implements DataProvider {
-  readonly capabilities = { syncToServer: false, localBackup: false };
+  readonly capabilities = { syncToServer: false, localBackup: false, fileImport: true };
 
   private ledgers = ref<Ledger[]>([]);
   private transactions = ref<Transaction[]>([]);
@@ -157,8 +157,10 @@ export class ServerProvider implements DataProvider {
       settings: [this.settings.value],
     };
   }
-  async importAll(): Promise<void> {
-    throw new Error('电脑端数据直连服务端，不支持导入');
+  async importAll(s: SyncSnapshot): Promise<void> {
+    // 备份文件导入：POST /api/import 硬删重建，服务端与手机端完全一致
+    await this.req('POST', '/api/import', s);
+    await this.reloadAll();
   }
   async syncToServer(): Promise<SyncResult> {
     throw new Error('电脑端数据直连服务端，无需同步');

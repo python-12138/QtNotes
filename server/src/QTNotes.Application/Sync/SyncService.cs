@@ -27,6 +27,7 @@ public sealed record SyncResult(
 public interface ISyncService
 {
     Task<SyncResult> MirrorAsync(SyncPayload payload);
+    Task<SyncResult> ReplaceAsync(SyncPayload payload);
 }
 
 /// <summary>
@@ -53,6 +54,52 @@ public sealed class SyncService : ISyncService
         var settings = await MirrorAsync(payload.Settings, now);
 
         return new SyncResult(ledgers, transactions, categories, accounts, trips, settings, now);
+    }
+
+    /// <summary>
+    /// 完全覆盖（备份文件恢复）：硬删 6 张表后只插入存活行，导入后服务端与手机完全一致。
+    /// 手机导出的文件里墓碑行（DeletedAt 非空）表示「已删除」，清空重建后无需保留，故跳过。
+    /// 与 MirrorAsync（合并、保留服务端独有行）不同：本方法清除服务端独有数据，达成严格镜像。
+    /// </summary>
+    public async Task<SyncResult> ReplaceAsync(SyncPayload payload)
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        try
+        {
+            _db.Ado.BeginTran();
+            var ledgers = await ReplaceAsync(payload.Ledgers, now);
+            var transactions = await ReplaceAsync(payload.Transactions, now);
+            var categories = await ReplaceAsync(payload.Categories, now);
+            var accounts = await ReplaceAsync(payload.Accounts, now);
+            var trips = await ReplaceAsync(payload.Trips, now);
+            var settings = await ReplaceAsync(payload.Settings, now);
+            _db.Ado.CommitTran();
+            return new SyncResult(ledgers, transactions, categories, accounts, trips, settings, now);
+        }
+        catch
+        {
+            _db.Ado.RollbackTran();
+            throw;
+        }
+    }
+
+    private async Task<int> ReplaceAsync<TEntity>(List<TEntity>? incoming, long now)
+        where TEntity : EntityBase, new()
+    {
+        incoming ??= new List<TEntity>();
+
+        // 只导入存活行（DeletedAt 为空的），墓碑行随全表硬删一起消失
+        var alive = incoming.Where(x => x.DeletedAt == null).ToList();
+        foreach (var item in alive)
+        {
+            item.UpdatedAt = now;
+            item.DeletedAt = null;
+        }
+
+        await _db.Deleteable<TEntity>().ExecuteCommandAsync();
+        if (alive.Count > 0)
+            await _db.Insertable(alive).ExecuteCommandAsync();
+        return alive.Count;
     }
 
     private async Task<int> MirrorAsync<TEntity>(List<TEntity>? incoming, long now)

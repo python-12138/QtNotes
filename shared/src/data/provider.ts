@@ -6,10 +6,11 @@ import type { Account, AppSettings, Category, Ledger, LedgerType, Transaction, T
 import type { SyncResult, SyncSnapshot } from './types';
 
 export interface DataProvider {
-  /** 能力标记：控制「同步到电脑 / 导出导入」等 UI 是否显示 */
+  /** 能力标记：控制「同步到电脑 / 导出导入 / 从文件导入」等 UI 是否显示 */
   readonly capabilities: {
     syncToServer: boolean; // 手机端 true / 电脑端 false
     localBackup: boolean; // 手机端 true / 电脑端 false
+    fileImport: boolean; // 电脑端 true / 手机端 false（从备份文件导入到服务端）
   };
 
   /** 初始化：建默认账本、确保设置行存在、恢复当前账本 */
