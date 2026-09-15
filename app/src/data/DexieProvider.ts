@@ -5,7 +5,7 @@ import { computed, type ComputedRef, type Ref } from 'vue';
 import { db } from '../db/db';
 import { useLiveQuery } from '../store/useLiveQuery';
 import { uid } from '@shared/utils/id';
-import { categoriesFor, defaultAccounts } from '@shared/domain/seedDefaults';
+import { categoriesFor, accountsFor } from '@shared/domain/seedDefaults';
 import { DEFAULT_SETTINGS, SETTINGS_ID } from '@shared/domain/defaults';
 import { initCurrentLedger } from '@shared/store/currentLedger';
 import { SYNC_SERVER_KEY, type DataProvider } from '@shared/data/provider';
@@ -16,6 +16,7 @@ import type {
   Category,
   Ledger,
   LedgerType,
+  MealRecord,
   Transaction,
   TripRecord,
 } from '@shared/types';
@@ -78,6 +79,14 @@ export class DexieProvider implements DataProvider {
     return computed(() => (list.value ?? []).filter((t) => !t.deletedAt));
   }
 
+  queryMeals(ledgerId: Ref<string>): ComputedRef<MealRecord[]> {
+    const list = useLiveQuery(
+      () => db.meals.where('ledgerId').equals(ledgerId.value).toArray(),
+      [ledgerId],
+    );
+    return computed(() => (list.value ?? []).filter((m) => !m.deletedAt));
+  }
+
   querySettings(): ComputedRef<AppSettings> {
     const s = useLiveQuery(() => db.settings.get(SETTINGS_ID), []);
     return computed<AppSettings>(() => s.value ?? { ...DEFAULT_SETTINGS });
@@ -89,14 +98,14 @@ export class DexieProvider implements DataProvider {
       id: uid(),
       name,
       type,
-      icon: type === 'vehicle' ? '🚗' : '📒',
-      color: type === 'vehicle' ? '#3b82f6' : '#22c55e',
+      icon: type === 'vehicle' ? '🚗' : type === 'diet' ? '🍎' : '📒',
+      color: type === 'vehicle' ? '#3b82f6' : type === 'diet' ? '#f97316' : '#22c55e',
       createdAt: Date.now(),
     };
     await db.transaction('rw', db.ledgers, db.categories, db.accounts, async () => {
       await db.ledgers.add(ledger);
       await db.categories.bulkAdd(categoriesFor(ledger.id, type));
-      await db.accounts.bulkAdd(defaultAccounts(ledger.id));
+      await db.accounts.bulkAdd(accountsFor(ledger.id, type));
     });
     return ledger;
   }
@@ -111,13 +120,14 @@ export class DexieProvider implements DataProvider {
     const now = Date.now();
     await db.transaction(
       'rw',
-      [db.ledgers, db.transactions, db.categories, db.accounts, db.trips],
+      [db.ledgers, db.transactions, db.categories, db.accounts, db.trips, db.meals],
       async () => {
         await db.ledgers.update(id, { deletedAt: now });
         await db.transactions.where('ledgerId').equals(id).modify({ deletedAt: now });
         await db.categories.where('ledgerId').equals(id).modify({ deletedAt: now });
         await db.accounts.where('ledgerId').equals(id).modify({ deletedAt: now });
         await db.trips.where('ledgerId').equals(id).modify({ deletedAt: now });
+        await db.meals.where('ledgerId').equals(id).modify({ deletedAt: now });
       },
     );
   }
@@ -137,14 +147,30 @@ export class DexieProvider implements DataProvider {
   async addTransaction(t: Transaction): Promise<void> {
     await db.transactions.add(t);
   }
+  async updateTransaction(t: Transaction): Promise<void> {
+    // put 按主键整条覆盖，保留原 id/createdAt（调用方已带）
+    await db.transactions.put(t);
+  }
   async deleteTransaction(id: string): Promise<void> {
     await db.transactions.update(id, { deletedAt: Date.now() });
   }
   async addTrip(t: TripRecord): Promise<void> {
     await db.trips.add(t);
   }
+  async updateTrip(t: TripRecord): Promise<void> {
+    await db.trips.put(t);
+  }
   async deleteTrip(id: string): Promise<void> {
     await db.trips.update(id, { deletedAt: Date.now() });
+  }
+  async addMeal(m: MealRecord): Promise<void> {
+    await db.meals.add(m);
+  }
+  async updateMeal(m: MealRecord): Promise<void> {
+    await db.meals.put(m);
+  }
+  async deleteMeal(id: string): Promise<void> {
+    await db.meals.update(id, { deletedAt: Date.now() });
   }
 
   async saveSettings(patch: Partial<AppSettings>): Promise<void> {
@@ -159,33 +185,36 @@ export class DexieProvider implements DataProvider {
   // —— 备份 / 同步 ——
   // 注意：exportAll 保留墓碑行（deletedAt 非空），以便同步把「删除」也下发给服务端。
   async exportAll(): Promise<SyncSnapshot> {
-    const [ledgers, transactions, categories, accounts, trips, settings] = await Promise.all([
+    const [ledgers, transactions, categories, accounts, trips, meals, settings] = await Promise.all([
       db.ledgers.toArray(),
       db.transactions.toArray(),
       db.categories.toArray(),
       db.accounts.toArray(),
       db.trips.toArray(),
+      db.meals.toArray(),
       db.settings.toArray(),
     ]);
-    return { ledgers, transactions, categories, accounts, trips, settings };
+    return { ledgers, transactions, categories, accounts, trips, meals, settings };
   }
 
   async importAll(s: SyncSnapshot): Promise<void> {
     await db.transaction(
       'rw',
-      [db.ledgers, db.transactions, db.categories, db.accounts, db.trips, db.settings],
+      [db.ledgers, db.transactions, db.categories, db.accounts, db.trips, db.meals, db.settings],
       async () => {
         await db.ledgers.clear();
         await db.transactions.clear();
         await db.categories.clear();
         await db.accounts.clear();
         await db.trips.clear();
+        await db.meals.clear();
         await db.settings.clear();
         await db.ledgers.bulkAdd(s.ledgers);
         await db.transactions.bulkAdd(s.transactions);
         await db.categories.bulkAdd(s.categories);
         await db.accounts.bulkAdd(s.accounts);
         if (s.trips.length) await db.trips.bulkAdd(s.trips);
+        if (s.meals.length) await db.meals.bulkAdd(s.meals);
         if (s.settings.length) await db.settings.bulkAdd(s.settings);
       },
     );
@@ -235,6 +264,7 @@ export class DexieProvider implements DataProvider {
       categories: r.categories ?? 0,
       accounts: r.accounts ?? 0,
       trips: r.trips ?? 0,
+      meals: r.meals ?? 0,
       settings: r.settings ?? 0,
       syncedAt: r.syncedAt ?? Date.now(),
     };

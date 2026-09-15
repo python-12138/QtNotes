@@ -49,7 +49,14 @@ export function vehicleCategories(ledgerId: string): Category[] {
   ];
 }
 
-/** 按账本类型返回对应的默认分类 */
+/** 按账本类型返回对应的默认分类（饮食账本不记钱，无金额分类，返回空数组） */
 export function categoriesFor(ledgerId: string, type: LedgerType): Category[] {
-  return type === 'vehicle' ? vehicleCategories(ledgerId) : generalCategories(ledgerId);
+  if (type === 'vehicle') return vehicleCategories(ledgerId);
+  if (type === 'diet') return [];
+  return generalCategories(ledgerId);
+}
+
+/** 按账本类型返回默认账户（饮食账本不记钱，无账户） */
+export function accountsFor(ledgerId: string, type: LedgerType): Account[] {
+  return type === 'diet' ? [] : defaultAccounts(ledgerId);
 }

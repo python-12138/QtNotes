@@ -7,21 +7,26 @@ import VChart from 'vue-echarts';
 import { getDataProvider } from '../data/provider';
 import { useTransactions } from '../store/useTransactions';
 import { useTrips } from '../store/useTrips';
+import { useMeals } from '../store/useMeals';
 import { useCategories } from '../store/useCategories';
 import { useCurrentLedger } from '../store/currentLedger';
 import { useSettings } from '../store/useSettings';
 import { formatMoney } from '../utils/money';
 import { summarizeFuel, summarizeTrips, formatConsumption, formatCostPerKm } from '../utils/vehicle';
-import type { TxType } from '../types';
+import { summarizeMealsByDay, formatGrams } from '../utils/diet';
+import type { TxType, TripRecord } from '../types';
+import Add from './Add.vue';
 
 const ledger = useCurrentLedger();
 const transactions = useTransactions();
 const trips = useTrips();
+const meals = useMeals();
 const categories = useCategories();
 const settings = useSettings();
 const type = ref<TxType>('expense');
 
 const isVehicle = computed(() => ledger.value?.type === 'vehicle');
+const isDiet = computed(() => ledger.value?.type === 'diet');
 
 // —— 日期区间筛选（默认本月） ——
 const startDate = ref(dayjs().startOf('month').format('YYYY-MM-DD'));
@@ -120,6 +125,12 @@ const tripListDesc = computed(() => [...tripSummary.value.list].reverse());
 async function deleteTrip(id: string) {
   if (!confirm('删除这条行驶记录？')) return;
   await getDataProvider().deleteTrip(id);
+}
+
+// 点击行驶条目进入编辑：TripStat 缺 ledgerId/createdAt，按 id 反查完整 TripRecord 再传给编辑层
+const editingTrip = ref<TripRecord | null>(null);
+function editTrip(stat: { id: string }) {
+  editingTrip.value = trips.value.find((t) => t.id === stat.id) ?? null;
 }
 
 // —— 图表：每月加油金额（柱状）+ 行驶里程（按天折线） ——
@@ -253,6 +264,49 @@ const barOption = computed<any>(() => ({
   ],
 }));
 
+// —— 饮食账本：碳蛋脂汇总与每日趋势 ——
+const rangeMeals = computed(() => meals.value.filter((m) => inRange(m.date)));
+const dietDays = computed(() => summarizeMealsByDay(rangeMeals.value));
+
+// 区间累计 + 日均（日均按「有记录的天数」平均）
+const dietTotals = computed(() => {
+  let carbs = 0;
+  let protein = 0;
+  let fat = 0;
+  let kcal = 0;
+  for (const d of dietDays.value) {
+    carbs += d.carbs;
+    protein += d.protein;
+    fat += d.fat;
+    kcal += d.kcal;
+  }
+  const days = dietDays.value.length || 1;
+  return {
+    kcal,
+    carbs,
+    protein,
+    fat,
+    avgKcal: Math.round(kcal / days),
+    avgCarbs: Math.round(carbs / days),
+    avgProtein: Math.round(protein / days),
+    avgFat: Math.round(fat / days),
+  };
+});
+
+// 每日碳蛋脂堆叠柱状图（单位：克）
+const dietChartOption = computed<any>(() => ({
+  tooltip: { trigger: 'axis' },
+  legend: { data: ['碳水', '蛋白质', '脂肪'], bottom: 0, textStyle: { fontSize: 10 } },
+  grid: { left: 42, right: 12, top: 16, bottom: 40 },
+  xAxis: { type: 'category', data: dietDays.value.map((d) => d.date.slice(5)), axisLabel: { fontSize: 10 } },
+  yAxis: { type: 'value', axisLabel: { fontSize: 10 } },
+  series: [
+    { name: '碳水', type: 'bar', stack: 'total', data: dietDays.value.map((d) => d.carbs), itemStyle: { color: '#f59e0b' } },
+    { name: '蛋白质', type: 'bar', stack: 'total', data: dietDays.value.map((d) => d.protein), itemStyle: { color: '#3b82f6' } },
+    { name: '脂肪', type: 'bar', stack: 'total', data: dietDays.value.map((d) => d.fat), itemStyle: { color: '#f43f5e' } },
+  ],
+}));
+
 const presets: { key: Preset; label: string }[] = [
   { key: 'thisMonth', label: '本月' },
   { key: 'lastMonth', label: '上月' },
@@ -280,8 +334,28 @@ const presets: { key: Preset; label: string }[] = [
       </button>
     </div>
 
-    <!-- 车辆账本：油费 · 综合 -->
-    <div v-if="isVehicle" class="fuel-summary">
+    <!-- 饮食账本：碳蛋脂汇总 + 每日趋势 -->
+    <template v-if="isDiet">
+      <div class="stats-summary">
+        <div><span>累计热量</span><b>{{ dietTotals.kcal }} kcal</b></div>
+        <div><span>日均热量</span><b>{{ dietTotals.avgKcal }} kcal</b></div>
+      </div>
+      <div class="stats-summary">
+        <div><span>日均碳水</span><b>{{ formatGrams(dietTotals.avgCarbs) }}</b></div>
+        <div><span>日均蛋白</span><b>{{ formatGrams(dietTotals.avgProtein) }}</b></div>
+        <div><span>日均脂肪</span><b>{{ formatGrams(dietTotals.avgFat) }}</b></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title">每日碳蛋脂（克）</span></div>
+        <VChart v-if="dietDays.length > 0" class="chart-box" :option="dietChartOption" autoresize />
+        <div v-else class="empty">暂无数据</div>
+      </div>
+    </template>
+
+    <!-- 普通 / 用车 -->
+    <template v-else>
+      <!-- 车辆账本：油费 · 综合 -->
+      <div v-if="isVehicle" class="fuel-summary">
       <div class="section-title">油费 · 综合</div>
       <div class="fuel-summary-row">
         <div class="fuel-stat"><span>每公里成本</span><b>{{ formatCostPerKm(fuelSummary.avgCostPerKm) }}</b></div>
@@ -311,12 +385,12 @@ const presets: { key: Preset; label: string }[] = [
         <div class="fuel-stat"><span>累计行驶升数</span><b>{{ tripSummary.totalLiters.toFixed(1) }} L</b></div>
       </div>
       <ul v-if="tripListDesc.length > 0" class="trip-list">
-        <li v-for="t in tripListDesc" :key="t.id" class="trip-item">
+        <li v-for="t in tripListDesc" :key="t.id" class="trip-item" @click="editTrip(t)">
           <span class="trip-date">{{ t.date.slice(5) }}</span>
           <span class="trip-km">{{ t.km }} km · {{ t.liters }} L</span>
           <span class="trip-consumption">{{ t.consumption != null ? t.consumption.toFixed(1) + ' L/100km' : '—' }}</span>
           <b class="trip-cost">{{ t.cost != null ? '¥' + t.cost.toFixed(2) : '—' }}</b>
-          <button type="button" class="icon-btn danger trip-del" @click="deleteTrip(t.id)">🗑</button>
+          <button type="button" class="icon-btn danger trip-del" @click.stop="deleteTrip(t.id)">🗑</button>
         </li>
       </ul>
     </div>
@@ -368,5 +442,9 @@ const presets: { key: Preset; label: string }[] = [
         <VChart class="chart-box" :option="barOption" autoresize />
       </div>
     </div>
+    </template>
+
+    <!-- 编辑层（复用 Add 表单，回填后保存） -->
+    <Add v-if="editingTrip" :edit-trip="editingTrip" @close="editingTrip = null" />
   </div>
 </template>

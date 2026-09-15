@@ -6,7 +6,7 @@ import { useCategories } from '../store/useCategories';
 import { formatMoney } from '../utils/money';
 
 const props = defineProps<{ tx: Transaction; meta?: string; deletable?: boolean }>();
-const emit = defineEmits<{ (e: 'delete'): void }>();
+const emit = defineEmits<{ (e: 'delete'): void; (e: 'click'): void }>();
 
 const categories = useCategories();
 const cat = computed(() => categories.value.find((c) => c.id === props.tx.categoryId));
@@ -16,7 +16,7 @@ const icon = computed(() => cat.value?.icon ?? '📝');
 </script>
 
 <template>
-  <div class="tx-item">
+  <div class="tx-item" @click="emit('click')">
     <span class="tx-icon" :style="{ background: `${color}22`, color }">{{ icon }}</span>
     <div class="tx-info">
       <div class="tx-name">{{ name }}</div>
@@ -25,6 +25,6 @@ const icon = computed(() => cat.value?.icon ?? '📝');
     <div class="tx-amount" :class="tx.type">
       {{ tx.type === 'income' ? '+' : '−' }}¥{{ formatMoney(tx.amount) }}
     </div>
-    <button v-if="deletable" type="button" class="icon-btn danger tx-del" @click="emit('delete')">🗑</button>
+    <button v-if="deletable" type="button" class="icon-btn danger tx-del" @click.stop="emit('delete')">🗑</button>
   </div>
 </template>

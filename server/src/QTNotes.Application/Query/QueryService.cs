@@ -8,6 +8,7 @@ public interface IQueryService
     Task<List<Ledger>> GetLedgersAsync();
     Task<List<Transaction>> GetTransactionsAsync(string? ledgerId);
     Task<List<Trip>> GetTripsAsync(string? ledgerId);
+    Task<List<Meal>> GetMealsAsync(string? ledgerId);
     Task<List<Category>> GetCategoriesAsync(string? ledgerId);
     Task<List<Account>> GetAccountsAsync(string? ledgerId);
     Task<Setting?> GetSettingsAsync();
@@ -39,6 +40,16 @@ public sealed class QueryService : IQueryService
     public Task<List<Trip>> GetTripsAsync(string? ledgerId)
     {
         var q = _db.Queryable<Trip>().Where(x => x.DeletedAt == null);
+        if (!string.IsNullOrEmpty(ledgerId))
+            q = q.Where(x => x.LedgerId == ledgerId);
+        return q.OrderBy(x => x.Date, OrderByType.Desc)
+                .OrderBy(x => x.CreatedAt, OrderByType.Desc)
+                .ToListAsync();
+    }
+
+    public Task<List<Meal>> GetMealsAsync(string? ledgerId)
+    {
+        var q = _db.Queryable<Meal>().Where(x => x.DeletedAt == null);
         if (!string.IsNullOrEmpty(ledgerId))
             q = q.Where(x => x.LedgerId == ledgerId);
         return q.OrderBy(x => x.Date, OrderByType.Desc)

@@ -174,6 +174,23 @@ app.MapDelete("/api/trips/{id}", async (string id, IWriteService w) =>
     return Results.NoContent();
 });
 
+app.MapPost("/api/meals", async (Meal m, IWriteService w) =>
+{
+    await w.CreateMealAsync(m);
+    return Results.Created($"/api/meals/{m.Id}", m);
+});
+app.MapPut("/api/meals/{id}", async (string id, Meal m, IWriteService w) =>
+{
+    m.Id = id;
+    await w.UpdateMealAsync(m);
+    return Results.NoContent();
+});
+app.MapDelete("/api/meals/{id}", async (string id, IWriteService w) =>
+{
+    await w.DeleteMealAsync(id);
+    return Results.NoContent();
+});
+
 app.MapPut("/api/settings", async (Setting s, IWriteService w) =>
 {
     await w.UpsertSettingsAsync(s);
@@ -184,6 +201,7 @@ app.MapPut("/api/settings", async (Setting s, IWriteService w) =>
 app.MapGet("/api/ledgers", (IQueryService q) => q.GetLedgersAsync());
 app.MapGet("/api/transactions", (string? ledgerId, IQueryService q) => q.GetTransactionsAsync(ledgerId));
 app.MapGet("/api/trips", (string? ledgerId, IQueryService q) => q.GetTripsAsync(ledgerId));
+app.MapGet("/api/meals", (string? ledgerId, IQueryService q) => q.GetMealsAsync(ledgerId));
 app.MapGet("/api/categories", (string? ledgerId, IQueryService q) => q.GetCategoriesAsync(ledgerId));
 app.MapGet("/api/accounts", (string? ledgerId, IQueryService q) => q.GetAccountsAsync(ledgerId));
 app.MapGet("/api/settings", async (IQueryService q) => Results.Ok(await q.GetSettingsAsync()));

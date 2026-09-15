@@ -3,7 +3,7 @@
 // 响应式：内存里维护 6 张表全量 ref，写操作成功后 reloadAll() 重拉，query* 返回的 computed 随之更新。
 import { computed, ref, type ComputedRef, type Ref } from 'vue';
 import { uid } from '@shared/utils/id';
-import { categoriesFor, defaultAccounts } from '@shared/domain/seedDefaults';
+import { categoriesFor, accountsFor } from '@shared/domain/seedDefaults';
 import { DEFAULT_SETTINGS, SETTINGS_ID } from '@shared/domain/defaults';
 import { initCurrentLedger } from '@shared/store/currentLedger';
 import type { DataProvider } from '@shared/data/provider';
@@ -14,6 +14,7 @@ import type {
   Category,
   Ledger,
   LedgerType,
+  MealRecord,
   Transaction,
   TripRecord,
 } from '@shared/types';
@@ -26,6 +27,7 @@ export class ServerProvider implements DataProvider {
   private categories = ref<Category[]>([]);
   private accounts = ref<Account[]>([]);
   private trips = ref<TripRecord[]>([]);
+  private meals = ref<MealRecord[]>([]);
   private settings = ref<AppSettings>({ ...DEFAULT_SETTINGS });
 
   async init(): Promise<void> {
@@ -71,6 +73,12 @@ export class ServerProvider implements DataProvider {
     );
   }
 
+  queryMeals(ledgerId: Ref<string>): ComputedRef<MealRecord[]> {
+    return computed(() =>
+      this.meals.value.filter((m) => m.ledgerId === ledgerId.value && !m.deletedAt),
+    );
+  }
+
   querySettings(): ComputedRef<AppSettings> {
     return computed(() => this.settings.value);
   }
@@ -81,14 +89,14 @@ export class ServerProvider implements DataProvider {
       id: uid(),
       name,
       type,
-      icon: type === 'vehicle' ? '🚗' : '📒',
-      color: type === 'vehicle' ? '#3b82f6' : '#22c55e',
+      icon: type === 'vehicle' ? '🚗' : type === 'diet' ? '🍎' : '📒',
+      color: type === 'vehicle' ? '#3b82f6' : type === 'diet' ? '#f97316' : '#22c55e',
       createdAt: Date.now(),
     };
     await this.req('POST', '/api/ledgers', {
       ledger,
       categories: categoriesFor(ledger.id, type),
-      accounts: defaultAccounts(ledger.id),
+      accounts: accountsFor(ledger.id, type),
     });
     await this.reloadAll();
     return ledger;
@@ -123,6 +131,10 @@ export class ServerProvider implements DataProvider {
     await this.req('POST', '/api/transactions', t);
     await this.reloadAll();
   }
+  async updateTransaction(t: Transaction): Promise<void> {
+    await this.req('PUT', `/api/transactions/${t.id}`, t);
+    await this.reloadAll();
+  }
   async deleteTransaction(id: string): Promise<void> {
     await this.req('DELETE', `/api/transactions/${id}`);
     await this.reloadAll();
@@ -131,8 +143,24 @@ export class ServerProvider implements DataProvider {
     await this.req('POST', '/api/trips', t);
     await this.reloadAll();
   }
+  async updateTrip(t: TripRecord): Promise<void> {
+    await this.req('PUT', `/api/trips/${t.id}`, t);
+    await this.reloadAll();
+  }
   async deleteTrip(id: string): Promise<void> {
     await this.req('DELETE', `/api/trips/${id}`);
+    await this.reloadAll();
+  }
+  async addMeal(m: MealRecord): Promise<void> {
+    await this.req('POST', '/api/meals', m);
+    await this.reloadAll();
+  }
+  async updateMeal(m: MealRecord): Promise<void> {
+    await this.req('PUT', `/api/meals/${m.id}`, m);
+    await this.reloadAll();
+  }
+  async deleteMeal(id: string): Promise<void> {
+    await this.req('DELETE', `/api/meals/${id}`);
     await this.reloadAll();
   }
 
@@ -154,6 +182,7 @@ export class ServerProvider implements DataProvider {
       categories: this.categories.value,
       accounts: this.accounts.value,
       trips: this.trips.value,
+      meals: this.meals.value,
       settings: [this.settings.value],
     };
   }
@@ -168,12 +197,13 @@ export class ServerProvider implements DataProvider {
 
   // —— 内部 ——
   private async reloadAll(): Promise<void> {
-    const [ls, txs, cats, accs, trps, sts] = await Promise.all([
+    const [ls, txs, cats, accs, trps, mls, sts] = await Promise.all([
       this.req<Ledger[]>('GET', '/api/ledgers'),
       this.req<Transaction[]>('GET', '/api/transactions'),
       this.req<Category[]>('GET', '/api/categories'),
       this.req<Account[]>('GET', '/api/accounts'),
       this.req<TripRecord[]>('GET', '/api/trips'),
+      this.req<MealRecord[]>('GET', '/api/meals'),
       this.req<AppSettings | null>('GET', '/api/settings'),
     ]);
     this.ledgers.value = ls ?? [];
@@ -181,6 +211,7 @@ export class ServerProvider implements DataProvider {
     this.categories.value = cats ?? [];
     this.accounts.value = accs ?? [];
     this.trips.value = trps ?? [];
+    this.meals.value = mls ?? [];
     this.settings.value = sts ?? { ...DEFAULT_SETTINGS };
   }
 

@@ -1058,3 +1058,145 @@ body {
 .chart-grid .card {
   margin: 12px 16px;
 }
+
+/* 饮食账本：记一顿饭（拍照 / 相册） */
+.diet-photo-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.diet-photo-preview {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.diet-macro-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* 碳蛋脂输入框：固定标签 + 输入框，填了值也能看出是哪个指标 */
+.macro-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.macro-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.diet-error {
+  color: var(--expense);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+/* 饮食记录条目（首页 / 明细共用） */
+.meal-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.meal-item:last-child {
+  border-bottom: none;
+}
+
+.meal-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--bg);
+}
+
+.meal-thumb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+
+.meal-info {
+  flex: 1;
+  margin: 0 12px;
+  min-width: 0;
+}
+
+.meal-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.meal-type {
+  font-size: 11px;
+  color: var(--primary);
+  background: rgba(34, 197, 94, 0.08);
+  padding: 2px 8px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.meal-summary {
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meal-macros {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.meal-macros b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.meal-del {
+  width: 30px;
+  height: 30px;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* 明细里的饮食条目卡片化（与 .day-group .tx-item 一致） */
+.day-group .meal-item {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 8px;
+  box-shadow: var(--shadow);
+  border-bottom: none;
+}
+
+.diet-day-kcal {
+  font-weight: 600;
+}
+
+/* 首页「今日摄入」：橙色渐变，与普通账本绿色区分 */
+.summary-card.diet-summary-card {
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  box-shadow: 0 8px 20px rgba(249, 115, 22, 0.28);
+}
+
+.summary-expense small {
+  font-size: 16px;
+  font-weight: 500;
+}

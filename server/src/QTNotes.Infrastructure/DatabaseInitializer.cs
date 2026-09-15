@@ -31,6 +31,7 @@ public static class DatabaseInitializer
             typeof(Category),
             typeof(Account),
             typeof(Trip),
+            typeof(Meal),
             typeof(Setting));
     }
 }

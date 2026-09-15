@@ -33,6 +33,10 @@ public interface IWriteService
     Task UpdateTripAsync(Trip trip);
     Task DeleteTripAsync(string id);
 
+    Task CreateMealAsync(Meal meal);
+    Task UpdateMealAsync(Meal meal);
+    Task DeleteMealAsync(string id);
+
     Task UpsertSettingsAsync(Setting setting);
 }
 
@@ -102,6 +106,10 @@ public sealed class WriteService : IWriteService
                 .SetColumns(x => x.UpdatedAt == now)
                 .Where(x => x.LedgerId == id).ExecuteCommandAsync();
             await _db.Updateable<Trip>()
+                .SetColumns(x => x.DeletedAt == now)
+                .SetColumns(x => x.UpdatedAt == now)
+                .Where(x => x.LedgerId == id).ExecuteCommandAsync();
+            await _db.Updateable<Meal>()
                 .SetColumns(x => x.DeletedAt == now)
                 .SetColumns(x => x.UpdatedAt == now)
                 .Where(x => x.LedgerId == id).ExecuteCommandAsync();
@@ -198,6 +206,25 @@ public sealed class WriteService : IWriteService
     public async Task DeleteTripAsync(string id)
     {
         await SoftDelete<Trip>(id, Now());
+    }
+
+    public async Task CreateMealAsync(Meal meal)
+    {
+        meal.UpdatedAt = Now();
+        meal.DeletedAt = null;
+        await _db.Insertable(meal).ExecuteCommandAsync();
+    }
+
+    public async Task UpdateMealAsync(Meal meal)
+    {
+        meal.UpdatedAt = Now();
+        meal.DeletedAt = null;
+        await _db.Updateable(meal).ExecuteCommandAsync();
+    }
+
+    public async Task DeleteMealAsync(string id)
+    {
+        await SoftDelete<Meal>(id, Now());
     }
 
     public async Task UpsertSettingsAsync(Setting setting)

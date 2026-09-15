@@ -4,6 +4,7 @@ import { ref } from 'vue';
 import type { LedgerType } from '../types';
 import { useLedgers, currentLedgerId, setCurrentLedger } from '../store/currentLedger';
 import { getDataProvider } from '../data/provider';
+import { LEDGER_TYPE_LABELS } from '../presets';
 
 const emit = defineEmits<{ (e: 'close'): void }>();
 
@@ -52,7 +53,7 @@ async function submit() {
             {{ l.icon }}
           </span>
           <span class="ledger-name">{{ l.name }}</span>
-          <span class="ledger-tag">{{ l.type === 'vehicle' ? '用车' : '普通' }}</span>
+          <span class="ledger-tag">{{ LEDGER_TYPE_LABELS[l.type] }}</span>
         </button>
 
         <template v-if="creating">
@@ -73,6 +74,14 @@ async function submit() {
               @click="type = 'vehicle'"
             >
               用车费用
+            </button>
+            <button
+              type="button"
+              class="chip"
+              :class="{ active: type === 'diet' }"
+              @click="type = 'diet'"
+            >
+              饮食账本
             </button>
           </div>
           <button type="button" class="btn btn-primary btn-block" @click="submit">创建</button>

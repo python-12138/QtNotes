@@ -4,8 +4,8 @@
 /** 收支类型 */
 export type TxType = 'income' | 'expense';
 
-/** 账本类型：general 普通账本 / vehicle 用车费用 */
-export type LedgerType = 'general' | 'vehicle';
+/** 账本类型：general 普通账本 / vehicle 用车费用 / diet 饮食账本 */
+export type LedgerType = 'general' | 'vehicle' | 'diet';
 
 /** 导航标签页 */
 export type Tab = 'home' | 'records' | 'stats' | 'settings';
@@ -45,6 +45,26 @@ export interface TripRecord {
   date: string; // 'YYYY-MM-DD'
   km: number; // 本次行驶距离（km）
   liters: number; // 本次使用升数（L）
+  createdAt: number; // 时间戳（毫秒）
+  deletedAt?: number; // 软删除墓碑
+}
+
+/** 餐次类型（饮食账本一顿饭属于哪一餐） */
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+
+/** 一顿饭的营养记录（饮食账本专用，独立表，不产生 Transaction） */
+export interface MealRecord {
+  id: string;
+  ledgerId: string; // 所属账本
+  date: string; // 'YYYY-MM-DD'
+  mealType: MealType; // 餐次：早/午/晚/加餐
+  summary: string; // 识别出的食物描述，如「米饭 + 红烧肉 + 青菜」
+  carbs: number; // 碳水（克）
+  protein: number; // 蛋白质（克）
+  fat: number; // 脂肪（克）
+  kcal: number; // 热量（千卡）
+  image?: string; // 压缩缩略图 dataURL（仅回显，丢弃原图）
+  note: string; // 备注
   createdAt: number; // 时间戳（毫秒）
   deletedAt?: number; // 软删除墓碑
 }

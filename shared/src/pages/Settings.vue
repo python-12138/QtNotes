@@ -10,6 +10,8 @@ import { useLedgers, currentLedgerId, setCurrentLedger } from '../store/currentL
 import { ensureSettings } from '../store/useSettings';
 import { uid } from '../utils/id';
 import { getTheme, applyTheme, type Theme } from '../utils/theme';
+import { LEDGER_TYPE_LABELS } from '../presets';
+import { getDeepseekKey, setDeepseekKey } from '../utils/deepseekKey';
 import type { TxType } from '../types';
 import type { SyncSnapshot } from '../data/types';
 import { diffCandidates, mergeSnapshots } from '../utils/importDiff';
@@ -24,6 +26,7 @@ const caps = getDataProvider().capabilities;
 
 const catType = ref<TxType>('expense');
 const theme = ref<Theme>(getTheme());
+const deepseekKey = ref(getDeepseekKey()); // 饮食识别的 DeepSeek Key（存 localStorage，不进备份/同步）
 const showCatForm = ref(false);
 const showAccountForm = ref(false);
 const fileInputRef = ref<HTMLInputElement | null>(null);
@@ -38,6 +41,12 @@ function toggleTheme() {
   const next: Theme = theme.value === 'light' ? 'dark' : 'light';
   theme.value = next;
   applyTheme(next);
+}
+
+// 保存 DeepSeek Key（混淆后写入 localStorage）
+function saveDeepseekKey() {
+  setDeepseekKey(deepseekKey.value);
+  alert('已保存');
 }
 
 // —— 分类 ——
@@ -142,6 +151,7 @@ function readSnapshot(file: File): Promise<SyncSnapshot | null> {
           categories: data.categories,
           accounts: data.accounts,
           trips: Array.isArray(data.trips) ? data.trips : [],
+          meals: Array.isArray(data.meals) ? data.meals : [],
           settings: Array.isArray(data.settings) ? data.settings : [],
         });
       } catch (e) {
@@ -223,7 +233,7 @@ async function syncToServer() {
   try {
     const r = await getDataProvider().syncToServer();
     alert(
-      `同步成功！\n账本 ${r.ledgers} · 流水 ${r.transactions} · 分类 ${r.categories} · 账户 ${r.accounts} · 行驶 ${r.trips}`,
+      `同步成功！\n账本 ${r.ledgers} · 流水 ${r.transactions} · 分类 ${r.categories} · 账户 ${r.accounts} · 行驶 ${r.trips} · 饮食 ${r.meals}`,
     );
   } catch (e) {
     alert('同步失败：' + (e instanceof Error ? e.message : '请确认电脑端服务已启动、且手机与电脑在同一局域网'));
@@ -249,7 +259,7 @@ async function syncToServer() {
       <ul class="manage-list">
         <li v-for="l in ledgers" :key="l.id" class="manage-item">
           <span class="tx-icon" :style="{ background: `${l.color}22`, color: l.color }">{{ l.icon }}</span>
-          <span class="manage-name">{{ l.name }}（{{ l.type === 'vehicle' ? '用车' : '普通' }}）</span>
+          <span class="manage-name">{{ l.name }}（{{ LEDGER_TYPE_LABELS[l.type] }}）</span>
           <button
             v-if="ledgers.length > 1"
             type="button"
@@ -322,6 +332,19 @@ async function syncToServer() {
         style="display: none"
         @change="(e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) onImportFile(f); (e.target as HTMLInputElement).value = ''; }"
       />
+    </div>
+
+    <div class="card">
+      <div class="section-title">饮食识别（DeepSeek）</div>
+      <p class="hint">在「饮食账本」拍照识别碳蛋脂/热量时需要。Key 仅存本机浏览器，不进代码、不进备份，只对你可见。</p>
+      <input
+        v-model="deepseekKey"
+        type="password"
+        class="text-input"
+        placeholder="粘贴 DeepSeek API Key（sk-…）"
+        autocomplete="off"
+      />
+      <button type="button" class="btn btn-primary btn-block" @click="saveDeepseekKey">保存 Key</button>
     </div>
 
     <div class="card about">

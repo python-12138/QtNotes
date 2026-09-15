@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { Ledger, Transaction, Category, Account, AppSettings, TripRecord } from '@shared/types';
+import type { Ledger, Transaction, Category, Account, AppSettings, TripRecord, MealRecord } from '@shared/types';
 
 // 本地数据库封装（基于 IndexedDB）。Dexie 自动管理表结构与索引。
 export class BookkeepingDB extends Dexie {
@@ -9,6 +9,7 @@ export class BookkeepingDB extends Dexie {
   accounts!: Table<Account, string>;
   settings!: Table<AppSettings, string>;
   trips!: Table<TripRecord, string>;
+  meals!: Table<MealRecord, string>;
 
   constructor() {
     super('bookkeeping');
@@ -45,6 +46,17 @@ export class BookkeepingDB extends Dexie {
       accounts: 'id, ledgerId',
       settings: 'id',
       trips: 'id, ledgerId, date, createdAt',
+    });
+
+    // v5：每顿饭记录（饮食账本独立模块）
+    this.version(5).stores({
+      ledgers: 'id, type, createdAt',
+      transactions: 'id, ledgerId, type, date, categoryId, accountId, createdAt',
+      categories: 'id, ledgerId, type',
+      accounts: 'id, ledgerId',
+      settings: 'id',
+      trips: 'id, ledgerId, date, createdAt',
+      meals: 'id, ledgerId, date, mealType, createdAt',
     });
   }
 }

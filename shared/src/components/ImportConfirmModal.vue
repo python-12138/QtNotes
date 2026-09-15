@@ -26,6 +26,7 @@ const GROUPS: { table: Table; title: string }[] = [
   { table: 'categories', title: '分类' },
   { table: 'accounts', title: '账户' },
   { table: 'trips', title: '行驶记录' },
+  { table: 'meals', title: '饮食记录' },
   { table: 'settings', title: '设置' },
 ];
 
@@ -41,6 +42,8 @@ function labelOf(table: Table, row: any): string {
       return `账户「${row.name}」`;
     case 'trips':
       return `行驶 ${row.date} · ${row.km}km ${row.liters}L`;
+    case 'meals':
+      return `饮食 ${row.date} · ${row.summary || '未命名'} ${row.kcal}kcal`;
     case 'settings':
       return '设置';
   }
@@ -85,6 +88,7 @@ function confirmImport() {
     categories: [],
     accounts: [],
     trips: [],
+    meals: [],
     settings: [],
   };
   for (const i of items.value) {

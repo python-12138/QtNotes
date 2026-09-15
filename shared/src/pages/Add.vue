@@ -1,20 +1,30 @@
 <script setup lang="ts">
-// 记一笔（车辆账本有两个入口）：
-//   「记油费」= 支出/收入 + 金额 + 油号 + 里程表读数
-//   「记行驶」= 每次开完车记录 本次距离 + 升数（独立于油费）
+// 记一笔（按账本类型分三种形态，支持「新增」与「编辑」两种模式）：
+//   普通账本 = 支出/收入 + 金额 + 分类 + 账户
+//   用车费用 = 「记油费」支出/收入 + 金额 + 油号 + 里程表读数；「记行驶」本次距离 + 升数
+//   饮食账本 = 「记一顿饭」拍照/相册识别碳蛋脂 + 手动可改
+// 编辑模式：传入 editTx / editTrip / editMeal 之一，表单回填该记录，保存时走 update 而非 add。
 import { computed, ref, watch } from 'vue';
 import { getDataProvider } from '../data/provider';
 import { currentLedgerId, useCurrentLedger } from '../store/currentLedger';
 import { useCategories } from '../store/useCategories';
 import { useAccounts } from '../store/useAccounts';
 import { useSettings } from '../store/useSettings';
-import { yuanToFen } from '../utils/money';
+import { yuanToFen, fenToYuan } from '../utils/money';
 import { todayStr } from '../utils/date';
 import { uid } from '../utils/id';
-import { FUEL_TYPE_OPTIONS } from '../presets';
-import type { TxType } from '../types';
+import { compressImage, recognizeMeal } from '../utils/dietRecognition';
+import { getDeepseekKey } from '../utils/deepseekKey';
+import { FUEL_TYPE_OPTIONS, MEAL_TYPE_OPTIONS } from '../presets';
+import type { MealRecord, MealType, Transaction, TripRecord, TxType } from '../types';
 import CategoryPicker from '../components/CategoryPicker.vue';
 import OilConfigModal from '../components/OilConfigModal.vue';
+
+const props = defineProps<{
+  editTx?: Transaction | null; // 编辑：待改的流水
+  editTrip?: TripRecord | null; // 编辑：待改的行驶记录
+  editMeal?: MealRecord | null; // 编辑：待改的饮食记录
+}>();
 
 const emit = defineEmits<{ (e: 'close'): void }>();
 
@@ -24,24 +34,55 @@ const ledger = useCurrentLedger();
 const settings = useSettings();
 
 const isVehicle = computed(() => ledger.value?.type === 'vehicle');
+const isDiet = computed(() => ledger.value?.type === 'diet');
 const mode = ref<'tx' | 'trip'>('tx');
 
+// 是否处于编辑模式（三种实体各自判断）
+const isEditTx = computed(() => !!props.editTx);
+const isEditTrip = computed(() => !!props.editTrip);
+const isEditMeal = computed(() => !!props.editMeal);
+
+// 顶部标题：饮食账本「记/编辑一顿饭」，车辆账本按入口「记油费/记行驶」，其余「记/编辑一笔」
+const title = computed(() => {
+  if (isDiet.value) return isEditMeal.value ? '编辑这顿饭' : '记一顿饭';
+  if (mode.value === 'trip') return isEditTrip.value ? '编辑行驶' : '记行驶';
+  return isEditTx.value ? '编辑这笔' : '记一笔';
+});
+
 // —— 记油费 ——
-const type = ref<TxType>('expense');
-const amountStr = ref('');
-const categoryId = ref<string | null>(null);
-const accountId = ref<string | null>(null);
-const date = ref(todayStr());
-const note = ref('');
-const fuelType = ref(FUEL_TYPE_OPTIONS[0] ?? '');
-const kmStr = ref(''); // 里程表读数（总里程）
+const type = ref<TxType>(props.editTx?.type ?? 'expense');
+// 金额：编辑时把「分」转回「元字符串」回填
+const amountStr = ref(props.editTx ? fenToYuan(props.editTx.amount) : '');
+const categoryId = ref<string | null>(props.editTx?.categoryId ?? null);
+const accountId = ref<string | null>(props.editTx?.accountId ?? null);
+const date = ref(props.editTx?.date ?? todayStr());
+const note = ref(props.editTx?.note ?? '');
+const fuelType = ref(props.editTx?.fuelType ?? FUEL_TYPE_OPTIONS[0] ?? '');
+const kmStr = ref(props.editTx?.km != null ? String(props.editTx.km) : ''); // 里程表读数（总里程）
 
 // —— 记行驶 ——
-const tripDate = ref(todayStr());
-const tripKmStr = ref('');
-const tripLitersStr = ref('');
+const tripDate = ref(props.editTrip?.date ?? todayStr());
+const tripKmStr = ref(props.editTrip ? String(props.editTrip.km) : '');
+const tripLitersStr = ref(props.editTrip ? String(props.editTrip.liters) : '');
 
 const showOilConfig = ref(false);
+
+// —— 记一顿饭（饮食账本） ——
+const mealType = ref<MealType>(props.editMeal?.mealType ?? 'lunch'); // 餐次，默认午餐
+const dietDate = ref(props.editMeal?.date ?? todayStr());
+const dietSummary = ref(props.editMeal?.summary ?? ''); // 食物描述（识别自动填，可改）
+const carbsStr = ref(props.editMeal?.carbs ? String(props.editMeal.carbs) : ''); // 碳水克数（可改）
+const proteinStr = ref(props.editMeal?.protein ? String(props.editMeal.protein) : ''); // 蛋白质克数（可改）
+const fatStr = ref(props.editMeal?.fat ? String(props.editMeal.fat) : ''); // 脂肪克数（可改）
+const kcalStr = ref(props.editMeal?.kcal ? String(props.editMeal.kcal) : ''); // 热量千卡（可改）
+const dietNote = ref(props.editMeal?.note ?? '');
+const dietImage = ref(props.editMeal?.image ?? ''); // 压缩缩略图 dataURL（仅回显）
+const recognizing = ref(false); // 识别中：禁用按钮 + 显示提示
+const dietError = ref(''); // 识别错误信息
+
+// 拍照 / 相册两个隐藏 input
+const cameraInput = ref<HTMLInputElement | null>(null);
+const albumInput = ref<HTMLInputElement | null>(null);
 
 const typeCategories = computed(() => categories.value.filter((c) => c.type === type.value));
 const selectedCat = computed(() => categories.value.find((c) => c.id === categoryId.value));
@@ -121,16 +162,16 @@ async function saveTx() {
     alert('请选择账户');
     return;
   }
-  await getDataProvider().addTransaction({
-    id: uid(),
-    ledgerId: currentLedgerId.value,
+  const tx: Transaction = {
+    id: props.editTx?.id ?? uid(),
+    ledgerId: props.editTx?.ledgerId ?? currentLedgerId.value,
     type: type.value,
     amount: amountFen.value,
     categoryId: categoryId.value,
     accountId: accountId.value,
     date: date.value,
     note: note.value.trim(),
-    createdAt: Date.now(),
+    createdAt: props.editTx?.createdAt ?? Date.now(),
     // 油费记录才写入这些字段；里程表读数选填
     ...(isFuel.value
       ? {
@@ -138,7 +179,9 @@ async function saveTx() {
           ...(odometer.value > 0 ? { km: odometer.value } : {}),
         }
       : {}),
-  });
+  };
+  if (isEditTx.value) await getDataProvider().updateTransaction(tx);
+  else await getDataProvider().addTransaction(tx);
   emit('close');
 }
 
@@ -151,18 +194,95 @@ async function saveTrip() {
     alert('请输入使用升数');
     return;
   }
-  await getDataProvider().addTrip({
-    id: uid(),
-    ledgerId: currentLedgerId.value,
+  const trip: TripRecord = {
+    id: props.editTrip?.id ?? uid(),
+    ledgerId: props.editTrip?.ledgerId ?? currentLedgerId.value,
     date: tripDate.value,
     km: tripKm.value,
     liters: tripLiters.value,
-    createdAt: Date.now(),
-  });
+    createdAt: props.editTrip?.createdAt ?? Date.now(),
+  };
+  if (isEditTrip.value) await getDataProvider().updateTrip(trip);
+  else await getDataProvider().addTrip(trip);
+  emit('close');
+}
+
+// —— 饮食账本：拍照/相册 → 识别 → 自动填充 ——
+
+// 字符串 → 非负数字（空/非法一律 0）
+function numOf(s: string): number {
+  const v = parseFloat(s);
+  return Number.isFinite(v) && v > 0 ? v : 0;
+}
+
+// 选择图片后的统一入口：压缩 → 回显 → 识别 → 自动填表单
+async function onPickDietImage(file: File) {
+  dietError.value = '';
+  try {
+    const dataUrl = await compressImage(file);
+    dietImage.value = dataUrl; // 先回显缩略图
+    recognizing.value = true;
+    const apiKey = getDeepseekKey();
+    if (!apiKey) {
+      recognizing.value = false;
+      dietError.value = '未配置 DeepSeek API Key，请到「我的」里填写';
+      return;
+    }
+    const r = await recognizeMeal(dataUrl, apiKey);
+    // 识别成功：自动填充（用户可再手动改）
+    dietSummary.value = r.summary;
+    carbsStr.value = r.carbs > 0 ? String(r.carbs) : '';
+    proteinStr.value = r.protein > 0 ? String(r.protein) : '';
+    fatStr.value = r.fat > 0 ? String(r.fat) : '';
+    kcalStr.value = r.kcal > 0 ? String(r.kcal) : '';
+  } catch (e) {
+    dietError.value = e instanceof Error ? e.message : '识别失败，请重试';
+  } finally {
+    recognizing.value = false;
+  }
+}
+
+// 拍照 / 相册 input 的 change 事件（用完后清空 value，方便下次再选同一张）
+function onCameraChange(e: Event) {
+  const f = (e.target as HTMLInputElement).files?.[0];
+  if (f) onPickDietImage(f);
+  (e.target as HTMLInputElement).value = '';
+}
+
+async function saveMeal() {
+  const carbs = numOf(carbsStr.value);
+  const protein = numOf(proteinStr.value);
+  const fat = numOf(fatStr.value);
+  const kcal = numOf(kcalStr.value);
+  // 碳蛋脂/热量至少填一项才算有效
+  if (carbs === 0 && protein === 0 && fat === 0 && kcal === 0) {
+    alert('请拍照识别或手动填写碳蛋脂/热量');
+    return;
+  }
+  const meal: MealRecord = {
+    id: props.editMeal?.id ?? uid(),
+    ledgerId: props.editMeal?.ledgerId ?? currentLedgerId.value,
+    date: dietDate.value,
+    mealType: mealType.value,
+    summary: dietSummary.value.trim(),
+    carbs,
+    protein,
+    fat,
+    kcal,
+    ...(dietImage.value ? { image: dietImage.value } : {}),
+    note: dietNote.value.trim(),
+    createdAt: props.editMeal?.createdAt ?? Date.now(),
+  };
+  if (isEditMeal.value) await getDataProvider().updateMeal(meal);
+  else await getDataProvider().addMeal(meal);
   emit('close');
 }
 
 function save() {
+  if (isDiet.value) {
+    saveMeal();
+    return;
+  }
   if (mode.value === 'trip') saveTrip();
   else saveTx();
 }
@@ -172,130 +292,207 @@ function save() {
   <div class="add-page">
     <header class="add-header">
       <button type="button" class="icon-btn" @click="emit('close')">✕</button>
-      <span class="add-title">{{ mode === 'trip' ? '记行驶' : '记一笔' }}</span>
+      <span class="add-title">{{ title }}</span>
       <button type="button" class="save-btn" @click="save">保存</button>
     </header>
 
-    <!-- 车辆账本：双入口切换 -->
-    <div v-if="isVehicle" class="add-type-toggle add-mode-toggle">
-      <button type="button" :class="{ active: mode === 'tx' }" @click="mode = 'tx'">记油费</button>
-      <button type="button" :class="{ active: mode === 'trip' }" @click="mode = 'trip'">记行驶</button>
-    </div>
-
-    <!-- 记油费 -->
-    <template v-if="mode === 'tx'">
-      <div class="add-type-toggle">
-        <button
-          type="button"
-          class="expense"
-          :class="{ active: type === 'expense' }"
-          @click="type = 'expense'"
-        >
-          支出
-        </button>
-        <button
-          type="button"
-          class="income"
-          :class="{ active: type === 'income' }"
-          @click="type = 'income'"
-        >
-          收入
-        </button>
-      </div>
-
-      <div class="add-amount">
-        <span class="add-currency">¥</span>
-        <input
-          class="add-amount-input"
-          type="text"
-          inputmode="decimal"
-          placeholder="0.00"
-          :value="amountStr"
-          @input="onAmountInput"
-        />
-      </div>
-
+    <!-- 饮食账本：拍照识别 / 手动录入 -->
+    <template v-if="isDiet">
       <div class="add-body">
-        <CategoryPicker :type="type" :selected-id="categoryId" @select="categoryId = $event" />
+        <div class="add-field">
+          <label>拍照识别（识别后自动填充，可手动改）</label>
+          <div class="diet-photo-actions">
+            <button type="button" class="btn" :disabled="recognizing" @click="cameraInput?.click()">📷 拍照</button>
+            <button type="button" class="btn" :disabled="recognizing" @click="albumInput?.click()">🖼 相册</button>
+          </div>
+          <input ref="cameraInput" type="file" accept="image/*" capture="environment" style="display: none" @change="onCameraChange" />
+          <input ref="albumInput" type="file" accept="image/*" style="display: none" @change="onCameraChange" />
+        </div>
 
-        <!-- 油费字段：仅「油费」分类时显示 -->
-        <template v-if="isFuel">
-          <div class="add-field">
-            <label>油号</label>
-            <div class="account-chips">
-              <button
-                v-for="f in FUEL_TYPE_OPTIONS"
-                :key="f"
-                type="button"
-                class="chip"
-                :class="{ active: fuelType === f }"
-                @click="fuelType = f"
-              >
-                {{ f }}
-              </button>
-            </div>
-          </div>
-          <div class="add-field">
-            <label>里程表读数（选填）</label>
-            <input v-model="kmStr" class="text-input" type="number" inputmode="decimal" placeholder="如 80000（总里程 km）" />
-          </div>
-          <div class="fuel-preview fuel-preview-row">
-            <span>当天单价：{{ unitPriceText }}</span>
-            <button type="button" class="btn btn-sm" @click="showOilConfig = true">油价配置</button>
-          </div>
-        </template>
+        <div v-if="recognizing" class="hint">识别中…</div>
+        <div v-else-if="dietError" class="diet-error">{{ dietError }}</div>
+
+        <img v-if="dietImage" :src="dietImage" class="diet-photo-preview" alt="食物照片" />
 
         <div class="add-field">
-          <label>账户</label>
+          <label>餐次</label>
           <div class="account-chips">
             <button
-              v-for="a in accounts"
-              :key="a.id"
+              v-for="m in MEAL_TYPE_OPTIONS"
+              :key="m.value"
               type="button"
               class="chip"
-              :class="{ active: accountId === a.id }"
-              @click="accountId = a.id"
+              :class="{ active: mealType === m.value }"
+              @click="mealType = m.value"
             >
-              <span>{{ a.icon }}</span>
-              {{ a.name }}
+              {{ m.label }}
             </button>
           </div>
         </div>
 
         <div class="add-field">
+          <label>食物描述</label>
+          <input v-model="dietSummary" type="text" class="text-input" placeholder="如 米饭 + 红烧肉 + 青菜" />
+        </div>
+
+        <!-- 营养（每个输入固定带标签，填了值也知道是碳蛋脂哪个） -->
+        <div class="add-field">
+          <label>营养</label>
+          <div class="diet-macro-grid">
+            <label class="macro-field">
+              <span class="macro-label">碳水（克）</span>
+              <input v-model="carbsStr" class="text-input" type="number" inputmode="decimal" placeholder="0" />
+            </label>
+            <label class="macro-field">
+              <span class="macro-label">蛋白质（克）</span>
+              <input v-model="proteinStr" class="text-input" type="number" inputmode="decimal" placeholder="0" />
+            </label>
+            <label class="macro-field">
+              <span class="macro-label">脂肪（克）</span>
+              <input v-model="fatStr" class="text-input" type="number" inputmode="decimal" placeholder="0" />
+            </label>
+            <label class="macro-field">
+              <span class="macro-label">热量（千卡）</span>
+              <input v-model="kcalStr" class="text-input" type="number" inputmode="decimal" placeholder="0" />
+            </label>
+          </div>
+        </div>
+
+        <div class="add-field">
           <label>日期</label>
-          <input v-model="date" type="date" class="text-input" />
+          <input v-model="dietDate" type="date" class="text-input" />
         </div>
 
         <div class="add-field">
           <label>备注</label>
-          <input v-model="note" type="text" class="text-input" placeholder="添加备注（可选）" />
+          <input v-model="dietNote" type="text" class="text-input" placeholder="添加备注（可选）" />
         </div>
       </div>
     </template>
 
-    <!-- 记行驶 -->
+    <!-- 普通 / 用车费用：沿用金额记账 -->
     <template v-else>
-      <div class="add-body">
-        <div class="add-field">
-          <label>日期</label>
-          <input v-model="tripDate" type="date" class="text-input" />
-        </div>
-        <div class="add-field">
-          <label>本次行驶距离（km）</label>
-          <input v-model="tripKmStr" class="text-input" type="number" inputmode="decimal" placeholder="如 120" />
-        </div>
-        <div class="add-field">
-          <label>使用升数（L）</label>
-          <input v-model="tripLitersStr" class="text-input" type="number" inputmode="decimal" placeholder="如 8.5" />
-        </div>
-        <div class="fuel-preview">
-          <span>当天单价：{{ unitPriceText }}</span>
-          <span>本次油耗：{{ tripConsumptionText }}</span>
-          <span>本次成本：{{ tripCostText }}</span>
-        </div>
-        <button type="button" class="btn btn-block" @click="showOilConfig = true">油价配置</button>
+      <!-- 车辆账本：双入口切换 -->
+      <div v-if="isVehicle" class="add-type-toggle add-mode-toggle">
+        <button type="button" :class="{ active: mode === 'tx' }" @click="mode = 'tx'">记油费</button>
+        <button type="button" :class="{ active: mode === 'trip' }" @click="mode = 'trip'">记行驶</button>
       </div>
+
+      <!-- 记油费 -->
+      <template v-if="mode === 'tx'">
+        <div class="add-type-toggle">
+          <button
+            type="button"
+            class="expense"
+            :class="{ active: type === 'expense' }"
+            @click="type = 'expense'"
+          >
+            支出
+          </button>
+          <button
+            type="button"
+            class="income"
+            :class="{ active: type === 'income' }"
+            @click="type = 'income'"
+          >
+            收入
+          </button>
+        </div>
+
+        <div class="add-amount">
+          <span class="add-currency">¥</span>
+          <input
+            class="add-amount-input"
+            type="text"
+            inputmode="decimal"
+            placeholder="0.00"
+            :value="amountStr"
+            @input="onAmountInput"
+          />
+        </div>
+
+        <div class="add-body">
+          <CategoryPicker :type="type" :selected-id="categoryId" @select="categoryId = $event" />
+
+          <!-- 油费字段：仅「油费」分类时显示 -->
+          <template v-if="isFuel">
+            <div class="add-field">
+              <label>油号</label>
+              <div class="account-chips">
+                <button
+                  v-for="f in FUEL_TYPE_OPTIONS"
+                  :key="f"
+                  type="button"
+                  class="chip"
+                  :class="{ active: fuelType === f }"
+                  @click="fuelType = f"
+                >
+                  {{ f }}
+                </button>
+              </div>
+            </div>
+            <div class="add-field">
+              <label>里程表读数（选填）</label>
+              <input v-model="kmStr" class="text-input" type="number" inputmode="decimal" placeholder="如 80000（总里程 km）" />
+            </div>
+            <div class="fuel-preview fuel-preview-row">
+              <span>当天单价：{{ unitPriceText }}</span>
+              <button type="button" class="btn btn-sm" @click="showOilConfig = true">油价配置</button>
+            </div>
+          </template>
+
+          <div class="add-field">
+            <label>账户</label>
+            <div class="account-chips">
+              <button
+                v-for="a in accounts"
+                :key="a.id"
+                type="button"
+                class="chip"
+                :class="{ active: accountId === a.id }"
+                @click="accountId = a.id"
+              >
+                <span>{{ a.icon }}</span>
+                {{ a.name }}
+              </button>
+            </div>
+          </div>
+
+          <div class="add-field">
+            <label>日期</label>
+            <input v-model="date" type="date" class="text-input" />
+          </div>
+
+          <div class="add-field">
+            <label>备注</label>
+            <input v-model="note" type="text" class="text-input" placeholder="添加备注（可选）" />
+          </div>
+        </div>
+      </template>
+
+      <!-- 记行驶 -->
+      <template v-else>
+        <div class="add-body">
+          <div class="add-field">
+            <label>日期</label>
+            <input v-model="tripDate" type="date" class="text-input" />
+          </div>
+          <div class="add-field">
+            <label>本次行驶距离（km）</label>
+            <input v-model="tripKmStr" class="text-input" type="number" inputmode="decimal" placeholder="如 120" />
+          </div>
+          <div class="add-field">
+            <label>使用升数（L）</label>
+            <input v-model="tripLitersStr" class="text-input" type="number" inputmode="decimal" placeholder="如 8.5" />
+          </div>
+          <div class="fuel-preview">
+            <span>当天单价：{{ unitPriceText }}</span>
+            <span>本次油耗：{{ tripConsumptionText }}</span>
+            <span>本次成本：{{ tripCostText }}</span>
+          </div>
+          <button type="button" class="btn btn-block" @click="showOilConfig = true">油价配置</button>
+        </div>
+      </template>
     </template>
 
     <OilConfigModal v-if="showOilConfig" @close="showOilConfig = false" />
