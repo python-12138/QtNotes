@@ -42,13 +42,29 @@ export function getDeepseekKey(): string {
   return encoded ? deobfuscate(encoded) : '';
 }
 
-/** 保存 DeepSeek API Key（传空串等同清除） */
-export function setDeepseekKey(key: string): void {
-  if (!key.trim()) {
+/**
+ * 从粘贴文本里提取合法 Key：`sk-` 开头 + 字母/数字/下划线/连字符（至少 10 位）。
+ * 复制 Key 时末尾常混入 `/`、空格、换行、`>` 等多余字符，这里只保留合法段、其余丢弃，
+ * 从而避免「末尾带 / 导致认证失败」这类问题。若文本里根本没有合法 Key，原样 trim 返回
+ * （交由服务端报错，不做误判截断）。
+ */
+function extractDeepseekKey(input: string): string {
+  const m = input.match(/sk-[A-Za-z0-9_-]{10,}/);
+  return m ? m[0] : input.trim();
+}
+
+/**
+ * 保存 DeepSeek API Key（自动清理多余字符；传空串等同清除）。
+ * 返回实际保存的 Key，供界面回填、让用户确认存进去的到底是什么。
+ */
+export function setDeepseekKey(key: string): string {
+  const cleaned = extractDeepseekKey(key);
+  if (!cleaned) {
     localStorage.removeItem(STORAGE_KEY);
-    return;
+    return '';
   }
-  localStorage.setItem(STORAGE_KEY, obfuscate(key.trim()));
+  localStorage.setItem(STORAGE_KEY, obfuscate(cleaned));
+  return cleaned;
 }
 
 /** 是否已配置 Key（决定「拍照识别」入口是否可用） */

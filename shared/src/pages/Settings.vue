@@ -43,10 +43,18 @@ function toggleTheme() {
   applyTheme(next);
 }
 
-// 保存 DeepSeek Key（混淆后写入 localStorage）
+// 保存 DeepSeek Key（混淆后写入 localStorage；自动去除复制时带入的多余字符）
 function saveDeepseekKey() {
-  setDeepseekKey(deepseekKey.value);
-  alert('已保存');
+  const before = deepseekKey.value.trim();
+  const cleaned = setDeepseekKey(deepseekKey.value);
+  deepseekKey.value = cleaned; // 回填清理后的 Key，让用户看到实际存进去的内容
+  if (!cleaned) {
+    alert('已清除 Key');
+  } else if (cleaned !== before) {
+    alert('已保存（自动去除了 Key 里的多余字符，请确认末尾正确）');
+  } else {
+    alert('已保存');
+  }
 }
 
 // —— 分类 ——
