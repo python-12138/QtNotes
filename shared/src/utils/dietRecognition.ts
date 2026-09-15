@@ -69,25 +69,38 @@ export function compressImage(file: File, maxSize = MAX_IMAGE_SIZE): Promise<str
 export async function recognizeMeal(imageDataUrl: string, apiKey: string): Promise<RecognitionResult> {
   if (!apiKey) throw new Error('未配置 DeepSeek API Key，请到「设置」里填写');
 
-  const resp = await fetch(DEEPSEEK_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: DEEPSEEK_VISION_MODEL,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: RECOGNITION_PROMPT },
-            { type: 'image_url', image_url: { url: imageDataUrl } },
-          ],
-        },
-      ],
-    }),
-  });
+  // 加超时：网络不通时避免一直卡在「识别中」，30 秒后主动中断并给出可读提示
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+
+  let resp: Response;
+  try {
+    resp = await fetch(DEEPSEEK_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: DEEPSEEK_VISION_MODEL,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: RECOGNITION_PROMPT },
+              { type: 'image_url', image_url: { url: imageDataUrl } },
+            ],
+          },
+        ],
+      }),
+      signal: controller.signal,
+    });
+  } catch {
+    // fetch 网络层失败（iOS Safari 常显示成英文 "Load failed"）：多半是网络不通/波动，与 Key 无关
+    throw new Error('网络请求失败，连不上 DeepSeek（请确认手机能正常上网，稍后重试；可切换 WiFi / 流量）');
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!resp.ok) {
     // 尽量取回服务端真实错误信息（如 key 无效、余额不足）
