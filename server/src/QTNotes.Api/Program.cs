@@ -205,6 +205,21 @@ app.MapGet("/api/meals", (string? ledgerId, IQueryService q) => q.GetMealsAsync(
 app.MapGet("/api/categories", (string? ledgerId, IQueryService q) => q.GetCategoriesAsync(ledgerId));
 app.MapGet("/api/accounts", (string? ledgerId, IQueryService q) => q.GetAccountsAsync(ledgerId));
 app.MapGet("/api/settings", async (IQueryService q) => Results.Ok(await q.GetSettingsAsync()));
+// —— 全量快照导出：手机端「从电脑还原」拉取用（只含存活行，settings 单行包装成数组） ——
+app.MapGet("/api/export", async (IQueryService q) =>
+{
+    var settings = await q.GetSettingsAsync();
+    return Results.Ok(new SyncPayload
+    {
+        Ledgers = await q.GetLedgersAsync(),
+        Transactions = await q.GetTransactionsAsync(null),
+        Categories = await q.GetCategoriesAsync(null),
+        Accounts = await q.GetAccountsAsync(null),
+        Trips = await q.GetTripsAsync(null),
+        Meals = await q.GetMealsAsync(null),
+        Settings = settings is null ? new List<Setting>() : new List<Setting> { settings },
+    });
+});
 // 健康检查：真正检测数据库连通性，便于一眼判断是数据库问题还是网络问题。
 app.MapGet("/api/health", async (ISqlSugarClient db) =>
 {

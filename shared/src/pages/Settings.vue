@@ -229,15 +229,20 @@ function onCancelImport() {
   pendingCandidates.value = null;
 }
 
-// —— 同步到电脑（单向备份：手机 → 电脑端服务）——
-async function syncToServer() {
+// 提示输入电脑端服务地址并保存，返回规范化后的 base（取消或留空返回 null）
+function promptServer(): string | null {
   const saved = localStorage.getItem(SYNC_SERVER_KEY) ?? '';
   const server = window.prompt('电脑端服务地址（如 http://192.168.1.100:5000）', saved);
-  if (server == null) return; // 取消
+  if (server == null) return null; // 取消
   const base = server.trim().replace(/\/+$/, '');
-  if (!base) return;
+  if (!base) return null;
   localStorage.setItem(SYNC_SERVER_KEY, base);
+  return base;
+}
 
+// —— 同步到电脑（单向备份：手机 → 电脑端服务）——
+async function syncToServer() {
+  if (promptServer() == null) return;
   try {
     const r = await getDataProvider().syncToServer();
     alert(
@@ -245,6 +250,24 @@ async function syncToServer() {
     );
   } catch (e) {
     alert('同步失败：' + (e instanceof Error ? e.message : '请确认电脑端服务已启动、且手机与电脑在同一局域网'));
+  }
+}
+
+// —— 从电脑还原（反向：电脑端服务 → 手机，覆盖本机）——
+async function restoreFromServer() {
+  if (promptServer() == null) return;
+  if (!confirm('从电脑还原将覆盖本机所有数据，确定继续？')) return;
+  try {
+    const r = await getDataProvider().restoreFromServer();
+    await ensureSettings();
+    const cur = currentLedgerId.value;
+    const list = await getDataProvider().listLedgers();
+    if (!list.some((l) => l.id === cur)) setCurrentLedger(list[0]?.id ?? '');
+    alert(
+      `还原成功！\n账本 ${r.ledgers} · 流水 ${r.transactions} · 分类 ${r.categories} · 账户 ${r.accounts} · 行驶 ${r.trips} · 饮食 ${r.meals}`,
+    );
+  } catch (e) {
+    alert('还原失败：' + (e instanceof Error ? e.message : '请确认电脑端服务已启动、且手机与电脑在同一局域网'));
   }
 }
 </script>
@@ -317,6 +340,7 @@ async function syncToServer() {
         <button type="button" class="btn" @click="fileInputRef?.click()">导入数据</button>
       </div>
       <button type="button" class="btn btn-block" @click="syncToServer">同步到电脑</button>
+      <button type="button" class="btn btn-block btn-danger" @click="restoreFromServer">从电脑还原</button>
       <p class="hint" style="margin-top: 6px">需先在电脑端启动服务（见 server/ 目录），手机与电脑连同一 Wi-Fi。</p>
       <input
         ref="fileInputRef"
@@ -328,9 +352,10 @@ async function syncToServer() {
     </div>
 
     <div v-if="caps.fileImport" class="card">
-      <div class="section-title">从文件导入</div>
-      <p class="hint">手机端「导出数据」得到 JSON 文件，传到电脑后在此导入，服务端数据将与手机完全一致（覆盖当前数据）。</p>
+      <div class="section-title">数据备份</div>
+      <p class="hint">电脑端数据直连服务端。可导出 JSON 备份，或导入手机端导出的 JSON 文件覆盖服务端。</p>
       <div class="btn-row">
+        <button type="button" class="btn" @click="exportData">导出数据</button>
         <button type="button" class="btn btn-primary" @click="importFileRef?.click()">导入 JSON 文件</button>
       </div>
       <input

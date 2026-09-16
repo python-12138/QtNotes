@@ -20,7 +20,7 @@ import type {
 } from '@shared/types';
 
 export class ServerProvider implements DataProvider {
-  readonly capabilities = { syncToServer: false, localBackup: false, fileImport: true };
+  readonly capabilities = { syncToServer: false, localBackup: false, fileImport: true, restoreFromServer: false };
 
   private ledgers = ref<Ledger[]>([]);
   private transactions = ref<Transaction[]>([]);
@@ -193,6 +193,9 @@ export class ServerProvider implements DataProvider {
   }
   async syncToServer(): Promise<SyncResult> {
     throw new Error('电脑端数据直连服务端，无需同步');
+  }
+  async restoreFromServer(): Promise<SyncResult> {
+    throw new Error('电脑端数据直连服务端，无需从服务端还原');
   }
 
   // —— 内部 ——

@@ -22,7 +22,7 @@ import type {
 } from '@shared/types';
 
 export class DexieProvider implements DataProvider {
-  readonly capabilities = { syncToServer: true, localBackup: true, fileImport: false };
+  readonly capabilities = { syncToServer: true, localBackup: true, fileImport: false, restoreFromServer: true };
 
   async init(): Promise<void> {
     await this.seedIfEmpty();
@@ -267,6 +267,45 @@ export class DexieProvider implements DataProvider {
       meals: r.meals ?? 0,
       settings: r.settings ?? 0,
       syncedAt: r.syncedAt ?? Date.now(),
+    };
+  }
+
+  async restoreFromServer(): Promise<SyncResult> {
+    const base = (localStorage.getItem(SYNC_SERVER_KEY) ?? '').trim().replace(/\/+$/, '');
+    if (!base) throw new Error('未配置电脑端服务地址');
+
+    // 15 秒超时：连不上时明确提示，而不是一直卡住
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    let resp: Response;
+    try {
+      resp = await fetch(`${base}/api/export`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+      });
+    } catch (e) {
+      throw new Error(
+        controller.signal.aborted
+          ? '连接超时：请确认手机与电脑在同一局域网、且电脑端服务已启动'
+          : '网络错误：无法连接到电脑端服务',
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const snap = (await resp.json()) as SyncSnapshot;
+    await this.importAll(snap);
+    return {
+      ledgers: snap.ledgers.length,
+      transactions: snap.transactions.length,
+      categories: snap.categories.length,
+      accounts: snap.accounts.length,
+      trips: snap.trips.length,
+      meals: snap.meals.length,
+      settings: snap.settings.length,
+      syncedAt: Date.now(),
     };
   }
 

@@ -156,6 +156,12 @@ body {
   color: #fff;
 }
 
+.btn-danger {
+  background: var(--expense);
+  border-color: var(--expense);
+  color: #fff;
+}
+
 .btn-block {
   width: 100%;
   margin-top: 8px;

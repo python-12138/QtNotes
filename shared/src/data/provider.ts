@@ -11,6 +11,7 @@ export interface DataProvider {
     syncToServer: boolean; // 手机端 true / 电脑端 false
     localBackup: boolean; // 手机端 true / 电脑端 false
     fileImport: boolean; // 电脑端 true / 手机端 false（从备份文件导入到服务端）
+    restoreFromServer: boolean; // 手机端 true / 电脑端 false（从服务端拉取全量数据覆盖本机）
   };
 
   /** 初始化：建默认账本、确保设置行存在、恢复当前账本 */
@@ -53,6 +54,7 @@ export interface DataProvider {
   exportAll(): Promise<SyncSnapshot>;
   importAll(s: SyncSnapshot): Promise<void>;
   syncToServer(): Promise<SyncResult>;
+  restoreFromServer(): Promise<SyncResult>;
 }
 
 /** 手机端「同步到电脑」服务地址的 localStorage key（电脑端无同步，不使用） */
