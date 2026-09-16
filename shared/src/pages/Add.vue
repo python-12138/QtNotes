@@ -77,6 +77,7 @@ const fatStr = ref(props.editMeal?.fat ? String(props.editMeal.fat) : ''); // �
 const kcalStr = ref(props.editMeal?.kcal ? String(props.editMeal.kcal) : ''); // 热量千卡（可改）
 const dietNote = ref(props.editMeal?.note ?? '');
 const dietImage = ref(props.editMeal?.image ?? ''); // 压缩缩略图 dataURL（仅回显）
+const dietHint = ref(''); // 补充描述（选填，帮助模型判断食物种类，如「这是鸡蛋」）
 const recognizing = ref(false); // 识别中：禁用按钮 + 显示提示
 const dietError = ref(''); // 识别错误信息
 
@@ -215,21 +216,18 @@ function numOf(s: string): number {
   return Number.isFinite(v) && v > 0 ? v : 0;
 }
 
-// 选择图片后的统一入口：压缩 → 回显 → 识别 → 自动填表单
-async function onPickDietImage(file: File) {
+// 用当前图片 + 补充描述调识别，成功后自动填充（用户可再手动改）
+async function runRecognition() {
+  if (!dietImage.value) return;
   dietError.value = '';
+  recognizing.value = true;
   try {
-    const dataUrl = await compressImage(file);
-    dietImage.value = dataUrl; // 先回显缩略图
-    recognizing.value = true;
     const apiKey = getDeepseekKey();
     if (!apiKey) {
-      recognizing.value = false;
       dietError.value = '未配置 DeepSeek API Key，请到「我的」里填写';
       return;
     }
-    const r = await recognizeMeal(dataUrl, apiKey);
-    // 识别成功：自动填充（用户可再手动改）
+    const r = await recognizeMeal(dietImage.value, apiKey, dietHint.value.trim());
     dietSummary.value = r.summary;
     carbsStr.value = r.carbs > 0 ? String(r.carbs) : '';
     proteinStr.value = r.protein > 0 ? String(r.protein) : '';
@@ -239,6 +237,18 @@ async function onPickDietImage(file: File) {
     dietError.value = e instanceof Error ? e.message : '识别失败，请重试';
   } finally {
     recognizing.value = false;
+  }
+}
+
+// 选择图片后的统一入口：压缩 → 回显 → 识别 → 自动填表单
+async function onPickDietImage(file: File) {
+  dietError.value = '';
+  try {
+    const dataUrl = await compressImage(file);
+    dietImage.value = dataUrl; // 先回显缩略图
+    await runRecognition();
+  } catch (e) {
+    dietError.value = e instanceof Error ? e.message : '识别失败，请重试';
   }
 }
 
@@ -305,6 +315,12 @@ function save() {
             <button type="button" class="btn" :disabled="recognizing" @click="cameraInput?.click()">📷 拍照</button>
             <button type="button" class="btn" :disabled="recognizing" @click="albumInput?.click()">🖼 相册</button>
           </div>
+          <input
+            v-model="dietHint"
+            type="text"
+            class="text-input"
+            placeholder="补充描述（可选，帮助识别，如：这是鸡蛋）"
+          />
           <input ref="cameraInput" type="file" accept="image/*" capture="environment" style="display: none" @change="onCameraChange" />
           <input ref="albumInput" type="file" accept="image/*" style="display: none" @change="onCameraChange" />
         </div>
@@ -313,6 +329,10 @@ function save() {
         <div v-else-if="dietError" class="diet-error">{{ dietError }}</div>
 
         <img v-if="dietImage" :src="dietImage" class="diet-photo-preview" alt="食物照片" />
+
+        <div v-if="dietImage" class="diet-photo-actions">
+          <button type="button" class="btn btn-sm" :disabled="recognizing" @click="runRecognition">🔁 重新识别</button>
+        </div>
 
         <div class="add-field">
           <label>餐次</label>

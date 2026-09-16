@@ -20,11 +20,18 @@ export interface RecognitionResult {
   kcal: number; // 热量（千卡）
 }
 
-/** 要求模型「只返回 JSON」的提示词 */
-const RECOGNITION_PROMPT =
-  '你是营养估算助手。识别图中食物，只返回一个 JSON 对象，键为 summary/carbs/protein/fat/kcal，' +
-  'summary 是食物描述字符串，carbs/protein/fat 是克数、kcal 是千卡，均为目测估算数值。' +
-  '不要输出任何多余文字、解释或代码块。';
+/** 拼装提示词：hint 为用户补充描述，用于纠偏拍照距离带来的误识别（如鸡蛋被看成鹌鹑蛋） */
+function buildPrompt(hint: string): string {
+  let p =
+    '你是营养估算助手。识别图中食物，只返回一个 JSON 对象，键为 summary/carbs/protein/fat/kcal，' +
+    'summary 是食物描述字符串，carbs/protein/fat 是克数、kcal 是千卡，均为目测估算数值。';
+  if (hint) {
+    p +=
+      '用户补充说明：「' + hint + '」。请优先以该说明为准判断食物种类与分量（例如用户已明确是鸡蛋，就不要识别成鹌鹑蛋）。';
+  }
+  p += '不要输出任何多余文字、解释或代码块。';
+  return p;
+}
 
 /**
  * 把用户选择的图片压缩成 JPEG dataURL。
@@ -65,8 +72,13 @@ export function compressImage(file: File, maxSize = MAX_IMAGE_SIZE): Promise<str
  * 调 DeepSeek 视觉模型识别一张食物图，返回碳蛋脂与热量。
  * @param imageDataUrl compressImage 输出的 JPEG dataURL
  * @param apiKey DeepSeek API Key（用户自填）
+ * @param hint 用户补充描述（选填），帮助模型纠偏拍照距离带来的误识别
  */
-export async function recognizeMeal(imageDataUrl: string, apiKey: string): Promise<RecognitionResult> {
+export async function recognizeMeal(
+  imageDataUrl: string,
+  apiKey: string,
+  hint = '',
+): Promise<RecognitionResult> {
   if (!apiKey) throw new Error('未配置 DeepSeek API Key，请到「设置」里填写');
 
   // 加超时：网络不通时避免一直卡在「识别中」，30 秒后主动中断并给出可读提示
@@ -87,7 +99,7 @@ export async function recognizeMeal(imageDataUrl: string, apiKey: string): Promi
           {
             role: 'user',
             content: [
-              { type: 'text', text: RECOGNITION_PROMPT },
+              { type: 'text', text: buildPrompt(hint) },
               { type: 'image_url', image_url: { url: imageDataUrl } },
             ],
           },
