@@ -13,7 +13,7 @@ import { useCurrentLedger } from '../store/currentLedger';
 import { useSettings } from '../store/useSettings';
 import { formatMoney } from '../utils/money';
 import { summarizeFuel, summarizeTrips, formatConsumption, formatCostPerKm } from '../utils/vehicle';
-import { summarizeMealsByDay, formatGrams } from '../utils/diet';
+import { summarizeMealsByDay, formatGrams, calcBMR } from '../utils/diet';
 import type { TxType, TripRecord } from '../types';
 import Add from './Add.vue';
 
@@ -293,6 +293,25 @@ const dietTotals = computed(() => {
   };
 });
 
+// —— 今日摄入 + 基础代谢 + 热量盈余 ——
+const today = dayjs().format('YYYY-MM-DD');
+const todayNutrition = computed(() => {
+  let carbs = 0;
+  let protein = 0;
+  let fat = 0;
+  let kcal = 0;
+  for (const m of meals.value) {
+    if (m.date !== today) continue;
+    carbs += m.carbs;
+    protein += m.protein;
+    fat += m.fat;
+    kcal += m.kcal;
+  }
+  return { carbs, protein, fat, kcal };
+});
+const bmr = computed(() => calcBMR(ledger.value ?? {}));
+const surplus = computed(() => (bmr.value != null ? todayNutrition.value.kcal - bmr.value : null));
+
 // 每日碳蛋脂堆叠柱状图（单位：克）
 const dietChartOption = computed<any>(() => ({
   tooltip: { trigger: 'axis' },
@@ -336,6 +355,28 @@ const presets: { key: Preset; label: string }[] = [
 
     <!-- 饮食账本：碳蛋脂汇总 + 每日趋势 -->
     <template v-if="isDiet">
+      <!-- 今日摄入：当天碳蛋脂 + 热量 -->
+      <div class="stats-summary">
+        <div><span>今日热量</span><b>{{ todayNutrition.kcal }} kcal</b></div>
+        <div><span>碳水</span><b>{{ formatGrams(todayNutrition.carbs) }}</b></div>
+        <div><span>蛋白质</span><b>{{ formatGrams(todayNutrition.protein) }}</b></div>
+        <div><span>脂肪</span><b>{{ formatGrams(todayNutrition.fat) }}</b></div>
+      </div>
+
+      <!-- 基础代谢 + 今日热量盈余 -->
+      <div class="stats-summary">
+        <div>
+          <span>基础代谢 BMR</span>
+          <b>{{ bmr != null ? bmr + ' kcal' : '—' }}</b>
+        </div>
+        <div>
+          <span>今日热量盈余</span>
+          <b :class="surplus != null ? (surplus >= 0 ? 'income' : 'expense') : ''">
+            {{ surplus != null ? (surplus >= 0 ? '+' : '') + surplus + ' kcal' : '—' }}
+          </b>
+        </div>
+      </div>
+
       <div class="stats-summary">
         <div><span>累计热量</span><b>{{ dietTotals.kcal }} kcal</b></div>
         <div><span>日均热量</span><b>{{ dietTotals.avgKcal }} kcal</b></div>

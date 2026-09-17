@@ -19,6 +19,11 @@ export interface Ledger {
   color: string; // hex
   createdAt: number;
   deletedAt?: number; // 软删除墓碑（毫秒时间戳），用于多端同步
+  // —— 饮食账本：身体信息（用于计算基础代谢 BMR）——
+  gender?: 'male' | 'female'; // 性别
+  age?: number; // 年龄（岁）
+  heightCm?: number; // 身高（厘米）
+  weightKg?: number; // 体重（公斤）
 }
 
 /** 流水（一笔账目） */

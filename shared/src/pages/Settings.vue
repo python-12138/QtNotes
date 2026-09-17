@@ -6,7 +6,7 @@ import dayjs from 'dayjs';
 import { getDataProvider, SYNC_SERVER_KEY } from '../data/provider';
 import { useCategories } from '../store/useCategories';
 import { useAccounts } from '../store/useAccounts';
-import { useLedgers, currentLedgerId, setCurrentLedger } from '../store/currentLedger';
+import { useLedgers, useCurrentLedger, currentLedgerId, setCurrentLedger } from '../store/currentLedger';
 import { ensureSettings } from '../store/useSettings';
 import { uid } from '../utils/id';
 import { getTheme, applyTheme, type Theme } from '../utils/theme';
@@ -18,11 +18,28 @@ import { diffCandidates, mergeSnapshots } from '../utils/importDiff';
 import CategoryForm from '../components/CategoryForm.vue';
 import AccountForm from '../components/AccountForm.vue';
 import ImportConfirmModal from '../components/ImportConfirmModal.vue';
+import BodyInfoModal from '../components/BodyInfoModal.vue';
 
 const categories = useCategories();
 const accounts = useAccounts();
 const ledgers = useLedgers();
+const currentLedger = useCurrentLedger();
 const caps = getDataProvider().capabilities;
+
+// 饮食账本：身体信息配置（用于基础代谢 BMR）
+const isDiet = computed(() => currentLedger.value?.type === 'diet');
+const showBody = ref(false);
+const bodySummary = computed(() => {
+  const l = currentLedger.value;
+  if (l?.gender == null) return '未填写';
+  const parts = [
+    l.gender === 'male' ? '男' : '女',
+    l.age != null ? `${l.age}岁` : '',
+    l.heightCm != null ? `${l.heightCm}cm` : '',
+    l.weightKg != null ? `${l.weightKg}kg` : '',
+  ].filter(Boolean);
+  return parts.join(' · ');
+});
 
 const catType = ref<TxType>('expense');
 const theme = ref<Theme>(getTheme());
@@ -367,6 +384,14 @@ async function restoreFromServer() {
       />
     </div>
 
+    <div v-if="isDiet" class="card">
+      <div class="section-title">身体信息</div>
+      <div class="setting-row" @click="showBody = true">
+        <span>身高 / 体重 / 年龄</span>
+        <span class="setting-value">{{ bodySummary }} ▸</span>
+      </div>
+    </div>
+
     <div class="card">
       <div class="section-title">饮食识别（DeepSeek）</div>
       <p class="hint">在「饮食账本」拍照识别碳蛋脂/热量时需要。Key 仅存本机浏览器，不进代码、不进备份，只对你可见。</p>
@@ -394,5 +419,6 @@ async function restoreFromServer() {
       @confirm="onConfirmImport"
       @cancel="onCancelImport"
     />
+    <BodyInfoModal v-if="showBody" @close="showBody = false" />
   </div>
 </template>

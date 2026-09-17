@@ -37,3 +37,20 @@ export function mealTypeLabel(type: MealRecord['mealType']): string {
 export function formatGrams(v: number): string {
   return Number.isInteger(v) ? `${v}g` : `${v.toFixed(1)}g`;
 }
+
+/** 身体信息（账本维度，用于基础代谢计算） */
+export interface BodyProfile {
+  gender?: 'male' | 'female';
+  age?: number;
+  heightCm?: number;
+  weightKg?: number;
+}
+
+/** 基础代谢 BMR（千卡/天），Mifflin-St Jeor 公式；信息不完整或非法返回 null */
+export function calcBMR(profile: BodyProfile): number | null {
+  const { gender, age, heightCm, weightKg } = profile;
+  if (gender == null || age == null || heightCm == null || weightKg == null) return null;
+  if (age <= 0 || heightCm <= 0 || weightKg <= 0) return null;
+  const base = 10 * weightKg + 6.25 * heightCm - 5 * age;
+  return Math.round(base + (gender === 'male' ? 5 : -161));
+}

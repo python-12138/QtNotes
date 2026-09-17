@@ -102,6 +102,11 @@ export class ServerProvider implements DataProvider {
     return ledger;
   }
 
+  async updateLedger(l: Ledger): Promise<void> {
+    await this.req('PUT', `/api/ledgers/${l.id}`, l);
+    await this.reloadAll();
+  }
+
   async deleteLedger(id: string): Promise<void> {
     const alive = this.ledgers.value.filter((l) => !l.deletedAt).length;
     if (alive <= 1) {

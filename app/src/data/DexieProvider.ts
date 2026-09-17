@@ -110,6 +110,11 @@ export class DexieProvider implements DataProvider {
     return ledger;
   }
 
+  async updateLedger(l: Ledger): Promise<void> {
+    // put 按主键整条覆盖（调用方传入完整 Ledger 对象）
+    await db.ledgers.put(l);
+  }
+
   async deleteLedger(id: string): Promise<void> {
     const alive = await db.ledgers.filter((l) => !l.deletedAt).count();
     if (alive <= 1) {

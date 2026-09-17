@@ -8,7 +8,7 @@ import { useTransactions } from '../store/useTransactions';
 import { useMeals } from '../store/useMeals';
 import { formatMoney } from '../utils/money';
 import { currentMonthStr, dateLabel, todayStr } from '../utils/date';
-import { mealTypeLabel, formatGrams } from '../utils/diet';
+import { mealTypeLabel, formatGrams, calcBMR } from '../utils/diet';
 import type { Transaction, MealRecord } from '../types';
 import TransactionItem from '../components/TransactionItem.vue';
 import Add from './Add.vue';
@@ -55,6 +55,10 @@ const todayNutrition = computed(() => {
   return { carbs, protein, fat, kcal };
 });
 
+// 基础代谢与今日热量盈余（未填身体信息时为 null）
+const bmr = computed(() => calcBMR(ledger.value ?? {}));
+const surplus = computed(() => (bmr.value != null ? todayNutrition.value.kcal - bmr.value : null));
+
 const recentMeals = computed(() => meals.value.slice(0, 10));
 
 // 点击某条记录后进入编辑（null = 关闭编辑层）
@@ -82,6 +86,9 @@ const editingMeal = ref<MealRecord | null>(null);
       <section class="summary-card diet-summary-card">
         <div class="summary-label">今日摄入</div>
         <div class="summary-expense">{{ todayNutrition.kcal }} <small>kcal</small></div>
+        <div v-if="surplus != null" class="summary-surplus">
+          今日{{ surplus >= 0 ? '盈余 +' : '缺口 ' }}{{ Math.abs(surplus) }} kcal
+        </div>
         <div class="summary-sub">
           <div>
             <span>碳水</span>

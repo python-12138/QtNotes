@@ -16,4 +16,16 @@ public class Ledger : EntityBase
 
     /// <summary>颜色（hex）</summary>
     public string Color { get; set; } = string.Empty;
+
+    /// <summary>性别：male / female（饮食账本基础代谢用）</summary>
+    public string? Gender { get; set; }
+
+    /// <summary>年龄（岁）</summary>
+    public int? Age { get; set; }
+
+    /// <summary>身高（厘米）</summary>
+    public double? HeightCm { get; set; }
+
+    /// <summary>体重（公斤）</summary>
+    public double? WeightKg { get; set; }
 }

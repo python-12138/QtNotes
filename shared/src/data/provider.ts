@@ -33,6 +33,7 @@ export interface DataProvider {
 
   // —— 写（实体对象由调用方构造好 id/createdAt 后传入） ——
   createLedger(name: string, type: LedgerType): Promise<Ledger>;
+  updateLedger(l: Ledger): Promise<void>;
   deleteLedger(id: string): Promise<void>;
   addCategory(c: Category): Promise<void>;
   deleteCategory(id: string): Promise<void>;

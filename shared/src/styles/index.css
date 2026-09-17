@@ -716,6 +716,11 @@ body {
   transform: translateX(20px);
 }
 
+.setting-value {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
 .manage-list {
   list-style: none;
 }
@@ -1205,4 +1210,12 @@ body {
 .summary-expense small {
   font-size: 16px;
   font-weight: 500;
+}
+
+/* 首页「今日摄入」卡片的盈余提示 */
+.summary-surplus {
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: -10px;
+  margin-bottom: 14px;
 }
