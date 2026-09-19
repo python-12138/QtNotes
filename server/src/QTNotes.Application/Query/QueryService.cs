@@ -9,6 +9,7 @@ public interface IQueryService
     Task<List<Transaction>> GetTransactionsAsync(string? ledgerId);
     Task<List<Trip>> GetTripsAsync(string? ledgerId);
     Task<List<Meal>> GetMealsAsync(string? ledgerId);
+    Task<List<FoodItem>> GetFoodItemsAsync(string? ledgerId);
     Task<List<Category>> GetCategoriesAsync(string? ledgerId);
     Task<List<Account>> GetAccountsAsync(string? ledgerId);
     Task<Setting?> GetSettingsAsync();
@@ -55,6 +56,14 @@ public sealed class QueryService : IQueryService
         return q.OrderBy(x => x.Date, OrderByType.Desc)
                 .OrderBy(x => x.CreatedAt, OrderByType.Desc)
                 .ToListAsync();
+    }
+
+    public Task<List<FoodItem>> GetFoodItemsAsync(string? ledgerId)
+    {
+        var q = _db.Queryable<FoodItem>().Where(x => x.DeletedAt == null);
+        if (!string.IsNullOrEmpty(ledgerId))
+            q = q.Where(x => x.LedgerId == ledgerId);
+        return q.OrderBy(x => x.CreatedAt).ToListAsync();
     }
 
     public Task<List<Category>> GetCategoriesAsync(string? ledgerId)

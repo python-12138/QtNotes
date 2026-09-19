@@ -1,7 +1,7 @@
 // 同步 / 备份相关的数据结构（与实体类型分离，供 DataProvider 使用）
-import type { Account, AppSettings, Category, Ledger, MealRecord, Transaction, TripRecord } from '../types';
+import type { Account, AppSettings, Category, FoodMenuItem, Ledger, MealRecord, Transaction, TripRecord } from '../types';
 
-/** 全量快照：手机端 7 张表的完整导出，也是 /api/sync 的请求体 */
+/** 全量快照：手机端 8 张表的完整导出，也是 /api/sync 的请求体 */
 export interface SyncSnapshot {
   ledgers: Ledger[];
   transactions: Transaction[];
@@ -9,6 +9,7 @@ export interface SyncSnapshot {
   accounts: Account[];
   trips: TripRecord[];
   meals: MealRecord[];
+  foodItems: FoodMenuItem[];
   settings: AppSettings[];
 }
 
@@ -20,6 +21,7 @@ export interface SyncResult {
   accounts: number;
   trips: number;
   meals: number;
+  foodItems: number;
   settings: number;
   syncedAt: number;
 }

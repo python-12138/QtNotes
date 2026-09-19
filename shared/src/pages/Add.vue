@@ -14,9 +14,12 @@ import { yuanToFen, fenToYuan } from '../utils/money';
 import { todayStr } from '../utils/date';
 import { uid } from '../utils/id';
 import { compressImage, recognizeMeal } from '../utils/dietRecognition';
+import type { RecognizedFood } from '../utils/dietRecognition';
 import { getDeepseekKey } from '../utils/deepseekKey';
 import { FUEL_TYPE_OPTIONS, MEAL_TYPE_OPTIONS } from '../presets';
-import type { MealRecord, MealType, Transaction, TripRecord, TxType } from '../types';
+import { useFoodItems } from '../store/useFoodItems';
+import { foodToNutritionPer100g, nutritionForMenu, type Nutrition } from '../utils/diet';
+import type { FoodMenuItem, MealRecord, MealType, Transaction, TripRecord, TxType } from '../types';
 import CategoryPicker from '../components/CategoryPicker.vue';
 import OilConfigModal from '../components/OilConfigModal.vue';
 
@@ -76,14 +79,29 @@ const proteinStr = ref(props.editMeal?.protein ? String(props.editMeal.protein) 
 const fatStr = ref(props.editMeal?.fat ? String(props.editMeal.fat) : ''); // 脂肪克数（可改）
 const kcalStr = ref(props.editMeal?.kcal ? String(props.editMeal.kcal) : ''); // 热量千卡（可改）
 const dietNote = ref(props.editMeal?.note ?? '');
-const dietImage = ref(props.editMeal?.image ?? ''); // 压缩缩略图 dataURL（仅回显）
-const dietHint = ref(''); // 补充描述（选填，帮助模型判断食物种类，如「这是鸡蛋」）
+const dietImage = ref(props.editMeal?.image ?? ''); // 吃之前照片 dataURL（仅回显）
+const dietAfterImage = ref(props.editMeal?.afterImage ?? ''); // 吃结束后照片 dataURL（仅回显）
+const dietHint = ref(''); // 吃之前补充描述（选填，帮助模型判断食物种类，如「这是鸡蛋」）
+const dietAfterHint = ref(''); // 吃结束后补充描述（选填）
 const recognizing = ref(false); // 识别中：禁用按钮 + 显示提示
 const dietError = ref(''); // 识别错误信息
+const dietFoods = ref<RecognizedFood[]>([]); // 吃之前识别出的每样食物（用于「加入菜单」）
 
-// 拍照 / 相册两个隐藏 input
+// 吃之前/吃结束后识别到的营养基准，最终摄入 = before − after（两者均为 0 时即纯手动录入）
+const beforeN = ref<Nutrition>({ carbs: 0, protein: 0, fat: 0, kcal: 0 });
+const afterN = ref<Nutrition>({ carbs: 0, protein: 0, fat: 0, kcal: 0 });
+const remainingKcal = ref<number>(props.editMeal?.remainingKcal ?? 0); // 吃结束后剩余热量（0 = 吃光）
+
+// 菜单选择
+const foodItems = useFoodItems();
+const showMenu = ref(false); // 是否展开菜单
+const menuGrams = ref<Record<string, string>>({}); // 每项待填克数
+
+// 拍照 / 相册隐藏 input（吃之前 + 吃结束后各一组）
 const cameraInput = ref<HTMLInputElement | null>(null);
 const albumInput = ref<HTMLInputElement | null>(null);
+const afterCameraInput = ref<HTMLInputElement | null>(null);
+const afterAlbumInput = ref<HTMLInputElement | null>(null);
 
 const typeCategories = computed(() => categories.value.filter((c) => c.type === type.value));
 const selectedCat = computed(() => categories.value.find((c) => c.id === categoryId.value));
@@ -216,9 +234,16 @@ function numOf(s: string): number {
   return Number.isFinite(v) && v > 0 ? v : 0;
 }
 
-// 用当前图片 + 补充描述调识别，成功后自动填充（用户可再手动改）
-async function runRecognition() {
-  if (!dietImage.value) return;
+// 识别失败时统一提示（不区分吃前/吃后）
+function failDiet(e: unknown) {
+  dietError.value = e instanceof Error ? e.message : '识别失败，请重试';
+}
+
+// 用当前图片 + 补充描述调识别，成功后自动填充（用户可再手动改）。
+// scene: 'before' 识别整份、'after' 识别剩余；最终摄入 = before − after。
+async function runRecognition(scene: 'before' | 'after') {
+  const image = scene === 'before' ? dietImage.value : dietAfterImage.value;
+  if (!image) return;
   dietError.value = '';
   recognizing.value = true;
   try {
@@ -227,36 +252,100 @@ async function runRecognition() {
       dietError.value = '未配置 DeepSeek API Key，请到「我的」里填写';
       return;
     }
-    const r = await recognizeMeal(dietImage.value, apiKey, dietHint.value.trim());
-    dietSummary.value = r.summary;
-    carbsStr.value = r.carbs > 0 ? String(r.carbs) : '';
-    proteinStr.value = r.protein > 0 ? String(r.protein) : '';
-    fatStr.value = r.fat > 0 ? String(r.fat) : '';
-    kcalStr.value = r.kcal > 0 ? String(r.kcal) : '';
+    const hint = scene === 'before' ? dietHint.value.trim() : dietAfterHint.value.trim();
+    const r = await recognizeMeal(image, apiKey, hint, scene);
+    if (scene === 'before') {
+      beforeN.value = { carbs: r.carbs, protein: r.protein, fat: r.fat, kcal: r.kcal };
+      dietFoods.value = r.foods ?? [];
+      dietSummary.value = r.summary;
+      fillFromRecognition();
+    } else {
+      afterN.value = { carbs: r.carbs, protein: r.protein, fat: r.fat, kcal: r.kcal };
+      remainingKcal.value = r.kcal;
+      fillFromRecognition();
+    }
   } catch (e) {
-    dietError.value = e instanceof Error ? e.message : '识别失败，请重试';
+    failDiet(e);
   } finally {
     recognizing.value = false;
   }
 }
 
-// 选择图片后的统一入口：压缩 → 回显 → 识别 → 自动填表单
-async function onPickDietImage(file: File) {
+// 依据 before/after 基准重算四个输入框（最终摄入 = before − after，负值归零）。
+// before 识别后直接填 before；after 识别后扣剩余。两者均为 0 时说明是纯手动录入，不覆盖。
+function fillFromRecognition() {
+  const b = beforeN.value;
+  const a = afterN.value;
+  const hasPhoto = b.kcal > 0 || b.carbs > 0 || b.protein > 0 || b.fat > 0 || a.kcal > 0;
+  if (!hasPhoto) return;
+  const carbs = Math.max(0, b.carbs - a.carbs);
+  const protein = Math.max(0, b.protein - a.protein);
+  const fat = Math.max(0, b.fat - a.fat);
+  const kcal = Math.max(0, b.kcal - a.kcal);
+  carbsStr.value = carbs > 0 ? String(carbs) : '';
+  proteinStr.value = protein > 0 ? String(protein) : '';
+  fatStr.value = fat > 0 ? String(fat) : '';
+  kcalStr.value = kcal > 0 ? String(kcal) : '';
+}
+
+// 选择图片后的统一入口：压缩 → 回显（识别由用户点「识别」按钮触发，不自动跑）
+async function onPickDietImage(file: File, scene: 'before' | 'after') {
   dietError.value = '';
   try {
     const dataUrl = await compressImage(file);
-    dietImage.value = dataUrl; // 先回显缩略图
-    await runRecognition();
+    if (scene === 'before') dietImage.value = dataUrl; // 只回显缩略图
+    else dietAfterImage.value = dataUrl;
   } catch (e) {
-    dietError.value = e instanceof Error ? e.message : '识别失败，请重试';
+    failDiet(e);
   }
 }
 
 // 拍照 / 相册 input 的 change 事件（用完后清空 value，方便下次再选同一张）
-function onCameraChange(e: Event) {
+function onCameraChange(e: Event, scene: 'before' | 'after') {
   const f = (e.target as HTMLInputElement).files?.[0];
-  if (f) onPickDietImage(f);
+  if (f) onPickDietImage(f, scene);
   (e.target as HTMLInputElement).value = '';
+}
+
+// 识别出的某样食物「加入菜单」：折算每 100g 后沉淀（同名已存在则跳过）
+async function addFoodToMenu(food: RecognizedFood) {
+  if (foodItems.value.some((f) => f.name === food.name)) {
+    alert(`「${food.name}」已在菜单中`);
+    return;
+  }
+  const per100 = foodToNutritionPer100g(food);
+  if (per100.kcal <= 0) {
+    alert('该食物份量或热量无效，无法加入菜单');
+    return;
+  }
+  await getDataProvider().addFoodItem({
+    id: uid(),
+    ledgerId: currentLedgerId.value,
+    name: food.name,
+    kcalPer100g: per100.kcal,
+    carbsPer100g: per100.carbs,
+    proteinPer100g: per100.protein,
+    fatPer100g: per100.fat,
+    createdAt: Date.now(),
+  });
+}
+
+// 菜单里某样食物按克数累加进当前这顿
+function addMenuToMeal(item: FoodMenuItem) {
+  const grams = numOf(menuGrams.value[item.id] ?? '');
+  if (grams <= 0) {
+    alert('请输入克数');
+    return;
+  }
+  const n = nutritionForMenu(item, grams);
+  carbsStr.value = String(numOf(carbsStr.value) + n.carbs);
+  proteinStr.value = String(numOf(proteinStr.value) + n.protein);
+  fatStr.value = String(numOf(fatStr.value) + n.fat);
+  kcalStr.value = String(numOf(kcalStr.value) + n.kcal);
+  dietSummary.value = dietSummary.value.trim()
+    ? `${dietSummary.value.trim()} + ${item.name}`
+    : item.name;
+  menuGrams.value[item.id] = '';
 }
 
 async function saveMeal() {
@@ -280,6 +369,8 @@ async function saveMeal() {
     fat,
     kcal,
     ...(dietImage.value ? { image: dietImage.value } : {}),
+    ...(dietAfterImage.value ? { afterImage: dietAfterImage.value } : {}),
+    ...(remainingKcal.value > 0 ? { remainingKcal: remainingKcal.value } : {}),
     note: dietNote.value.trim(),
     createdAt: props.editMeal?.createdAt ?? Date.now(),
   };
@@ -310,7 +401,7 @@ function save() {
     <template v-if="isDiet">
       <div class="add-body">
         <div class="add-field">
-          <label>拍照识别（识别后自动填充，可手动改）</label>
+          <label>吃之前（拍照识别整份，自动填充可改）</label>
           <div class="diet-photo-actions">
             <button type="button" class="btn" :disabled="recognizing" @click="cameraInput?.click()">📷 拍照</button>
             <button type="button" class="btn" :disabled="recognizing" @click="albumInput?.click()">🖼 相册</button>
@@ -318,20 +409,72 @@ function save() {
           <input
             v-model="dietHint"
             type="text"
-            class="text-input"
-            placeholder="补充描述（可选，帮助识别，如：这是鸡蛋）"
+            class="text-input diet-hint"
+            placeholder="补充描述（可选，如：这是鸡蛋）"
           />
-          <input ref="cameraInput" type="file" accept="image/*" capture="environment" style="display: none" @change="onCameraChange" />
-          <input ref="albumInput" type="file" accept="image/*" style="display: none" @change="onCameraChange" />
+          <input ref="cameraInput" type="file" accept="image/*" capture="environment" style="display: none" @change="onCameraChange($event, 'before')" />
+          <input ref="albumInput" type="file" accept="image/*" style="display: none" @change="onCameraChange($event, 'before')" />
+        </div>
+
+        <div class="add-field">
+          <label>吃结束后（可选，识别剩余并自动扣减）</label>
+          <div class="diet-photo-actions">
+            <button type="button" class="btn" :disabled="recognizing" @click="afterCameraInput?.click()">📷 拍照</button>
+            <button type="button" class="btn" :disabled="recognizing" @click="afterAlbumInput?.click()">🖼 相册</button>
+          </div>
+          <input
+            v-model="dietAfterHint"
+            type="text"
+            class="text-input diet-hint"
+            placeholder="补充描述（可选）"
+          />
+          <input ref="afterCameraInput" type="file" accept="image/*" capture="environment" style="display: none" @change="onCameraChange($event, 'after')" />
+          <input ref="afterAlbumInput" type="file" accept="image/*" style="display: none" @change="onCameraChange($event, 'after')" />
         </div>
 
         <div v-if="recognizing" class="hint">识别中…</div>
         <div v-else-if="dietError" class="diet-error">{{ dietError }}</div>
 
-        <img v-if="dietImage" :src="dietImage" class="diet-photo-preview" alt="食物照片" />
+        <div v-if="dietImage || dietAfterImage" class="diet-photo-dual">
+          <img v-if="dietImage" :src="dietImage" class="diet-photo-preview" alt="吃之前照片" />
+          <img v-if="dietAfterImage" :src="dietAfterImage" class="diet-photo-preview" alt="吃结束后照片" />
+        </div>
 
         <div v-if="dietImage" class="diet-photo-actions">
-          <button type="button" class="btn btn-sm" :disabled="recognizing" @click="runRecognition">🔁 重新识别</button>
+          <button type="button" class="btn btn-sm" :disabled="recognizing" @click="runRecognition('before')">🔍 识别</button>
+        </div>
+        <div v-if="dietAfterImage" class="diet-photo-actions">
+          <button type="button" class="btn btn-sm" :disabled="recognizing" @click="runRecognition('after')">🔍 识别剩余</button>
+        </div>
+
+        <div v-if="remainingKcal > 0" class="hint">已扣减剩余 {{ remainingKcal }} kcal，下方为本次实际摄入</div>
+
+        <!-- 识别出的食物清单：可逐样加入菜单 -->
+        <div v-if="dietFoods.length" class="add-field">
+          <label>识别出的食物（可加入菜单）</label>
+          <div class="food-list">
+            <div v-for="f in dietFoods" :key="f.name" class="food-row">
+              <span class="food-name">{{ f.name }}</span>
+              <span class="food-meta">{{ f.grams }}g · {{ f.kcal }} kcal</span>
+              <button type="button" class="btn btn-sm" @click="addFoodToMenu(f)">＋菜单</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 菜单选择：从已沉淀的食物里挑，按克数累加 -->
+        <div class="add-field">
+          <button type="button" class="btn btn-block" @click="showMenu = !showMenu">
+            📖 {{ showMenu ? '收起菜单' : '从菜单选择' }}
+          </button>
+          <div v-if="showMenu" class="menu-picker">
+            <div v-if="foodItems.length === 0" class="hint">菜单为空，先拍照识别并把食物「加入菜单」吧</div>
+            <div v-for="it in foodItems" :key="it.id" class="menu-row">
+              <span class="food-name">{{ it.name }}</span>
+              <span class="food-meta">{{ it.kcalPer100g }} kcal/100g</span>
+              <input v-model="menuGrams[it.id]" type="number" inputmode="decimal" class="text-input menu-grams" placeholder="克" />
+              <button type="button" class="btn btn-sm" @click="addMenuToMeal(it)">＋</button>
+            </div>
+          </div>
         </div>
 
         <div class="add-field">

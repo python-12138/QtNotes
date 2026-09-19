@@ -8,6 +8,7 @@ import { useCategories } from '../store/useCategories';
 import { useAccounts } from '../store/useAccounts';
 import { useLedgers, useCurrentLedger, currentLedgerId, setCurrentLedger } from '../store/currentLedger';
 import { ensureSettings } from '../store/useSettings';
+import { useFoodItems } from '../store/useFoodItems';
 import { uid } from '../utils/id';
 import { getTheme, applyTheme, type Theme } from '../utils/theme';
 import { LEDGER_TYPE_LABELS } from '../presets';
@@ -29,6 +30,57 @@ const caps = getDataProvider().capabilities;
 // 饮食账本：身体信息配置（用于基础代谢 BMR）
 const isDiet = computed(() => currentLedger.value?.type === 'diet');
 const showBody = ref(false);
+const foodItems = useFoodItems(); // 食物菜单
+const showFoodForm = ref(false);
+const foodName = ref('');
+const foodKcal = ref(''); // 每 100g 热量
+const foodCarbs = ref(''); // 每 100g 碳水
+const foodProtein = ref(''); // 每 100g 蛋白质
+const foodFat = ref(''); // 每 100g 脂肪
+
+// 字符串 → 非负数字（空/非法一律 0）
+function numOf(s: string): number {
+  const v = parseFloat(s);
+  return Number.isFinite(v) && v > 0 ? v : 0;
+}
+
+async function addFoodItem() {
+  const name = foodName.value.trim();
+  const kcal = numOf(foodKcal.value);
+  if (!name) {
+    alert('请输入食物名');
+    return;
+  }
+  if (kcal <= 0) {
+    alert('请输入每 100g 热量');
+    return;
+  }
+  if (foodItems.value.some((f) => f.name === name)) {
+    alert('菜单已有同名食物');
+    return;
+  }
+  await getDataProvider().addFoodItem({
+    id: uid(),
+    ledgerId: currentLedgerId.value,
+    name,
+    kcalPer100g: kcal,
+    carbsPer100g: numOf(foodCarbs.value),
+    proteinPer100g: numOf(foodProtein.value),
+    fatPer100g: numOf(foodFat.value),
+    createdAt: Date.now(),
+  });
+  foodName.value = '';
+  foodKcal.value = '';
+  foodCarbs.value = '';
+  foodProtein.value = '';
+  foodFat.value = '';
+  showFoodForm.value = false;
+}
+
+async function deleteFoodItem(id: string) {
+  if (!confirm('删除该食物？')) return;
+  await getDataProvider().deleteFoodItem(id);
+}
 const bodySummary = computed(() => {
   const l = currentLedger.value;
   if (l?.gender == null) return '未填写';
@@ -177,6 +229,7 @@ function readSnapshot(file: File): Promise<SyncSnapshot | null> {
           accounts: data.accounts,
           trips: Array.isArray(data.trips) ? data.trips : [],
           meals: Array.isArray(data.meals) ? data.meals : [],
+          foodItems: Array.isArray(data.foodItems) ? data.foodItems : [],
           settings: Array.isArray(data.settings) ? data.settings : [],
         });
       } catch (e) {
@@ -390,6 +443,43 @@ async function restoreFromServer() {
         <span>身高 / 体重 / 年龄</span>
         <span class="setting-value">{{ bodySummary }} ▸</span>
       </div>
+    </div>
+
+    <div v-if="isDiet" class="card">
+      <div class="section-title">食物菜单</div>
+      <p class="hint">识别过的食物按每 100g 营养存成菜单，记饭时可直接选、按克数折算。</p>
+      <ul class="manage-list">
+        <li v-for="f in foodItems" :key="f.id" class="manage-item">
+          <span class="manage-name">{{ f.name }}</span>
+          <span class="food-meta">{{ f.kcalPer100g }} kcal/100g</span>
+          <button type="button" class="icon-btn danger" @click="deleteFoodItem(f.id)">🗑</button>
+        </li>
+      </ul>
+      <div v-if="showFoodForm" class="food-form">
+        <input v-model="foodName" type="text" class="text-input" placeholder="食物名（如 米饭）" />
+        <div class="diet-macro-grid">
+          <label class="macro-field">
+            <span class="macro-label">热量/100g</span>
+            <input v-model="foodKcal" class="text-input" type="number" inputmode="decimal" placeholder="kcal" />
+          </label>
+          <label class="macro-field">
+            <span class="macro-label">碳水/100g</span>
+            <input v-model="foodCarbs" class="text-input" type="number" inputmode="decimal" placeholder="g" />
+          </label>
+          <label class="macro-field">
+            <span class="macro-label">蛋白质/100g</span>
+            <input v-model="foodProtein" class="text-input" type="number" inputmode="decimal" placeholder="g" />
+          </label>
+          <label class="macro-field">
+            <span class="macro-label">脂肪/100g</span>
+            <input v-model="foodFat" class="text-input" type="number" inputmode="decimal" placeholder="g" />
+          </label>
+        </div>
+        <button type="button" class="btn btn-primary btn-block" @click="addFoodItem">保存到菜单</button>
+      </div>
+      <button type="button" class="btn btn-block" @click="showFoodForm = !showFoodForm">
+        {{ showFoodForm ? '取消' : '＋ 手动添加食物' }}
+      </button>
     </div>
 
     <div class="card">

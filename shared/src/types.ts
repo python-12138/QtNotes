@@ -64,12 +64,27 @@ export interface MealRecord {
   date: string; // 'YYYY-MM-DD'
   mealType: MealType; // 餐次：早/午/晚/加餐
   summary: string; // 识别出的食物描述，如「米饭 + 红烧肉 + 青菜」
-  carbs: number; // 碳水（克）
+  carbs: number; // 碳水（克）——最终摄入值（吃之前 − 吃结束剩余）
   protein: number; // 蛋白质（克）
   fat: number; // 脂肪（克）
-  kcal: number; // 热量（千卡）
-  image?: string; // 压缩缩略图 dataURL（仅回显，丢弃原图）
+  kcal: number; // 热量（千卡）——最终摄入值
+  image?: string; // 压缩缩略图 dataURL（吃之前照片，仅回显，丢弃原图）
+  afterImage?: string; // 吃结束后照片 dataURL（选填，仅回显）
+  remainingKcal?: number; // 吃结束后剩余热量（千卡），0/缺省 = 吃光
   note: string; // 备注
+  createdAt: number; // 时间戳（毫秒）
+  deletedAt?: number; // 软删除墓碑
+}
+
+/** 食物菜单项（饮食账本：识别过的食物按每 100g 营养沉淀，独立表） */
+export interface FoodMenuItem {
+  id: string;
+  ledgerId: string; // 所属账本
+  name: string; // 食物名，如「米饭」
+  kcalPer100g: number; // 每 100g 热量（千卡）
+  carbsPer100g: number; // 每 100g 碳水（克）
+  proteinPer100g: number; // 每 100g 蛋白质（克）
+  fatPer100g: number; // 每 100g 脂肪（克）
   createdAt: number; // 时间戳（毫秒）
   deletedAt?: number; // 软删除墓碑
 }

@@ -12,6 +12,7 @@ import type {
   Account,
   AppSettings,
   Category,
+  FoodMenuItem,
   Ledger,
   LedgerType,
   MealRecord,
@@ -28,6 +29,7 @@ export class ServerProvider implements DataProvider {
   private accounts = ref<Account[]>([]);
   private trips = ref<TripRecord[]>([]);
   private meals = ref<MealRecord[]>([]);
+  private foodItems = ref<FoodMenuItem[]>([]);
   private settings = ref<AppSettings>({ ...DEFAULT_SETTINGS });
 
   async init(): Promise<void> {
@@ -76,6 +78,12 @@ export class ServerProvider implements DataProvider {
   queryMeals(ledgerId: Ref<string>): ComputedRef<MealRecord[]> {
     return computed(() =>
       this.meals.value.filter((m) => m.ledgerId === ledgerId.value && !m.deletedAt),
+    );
+  }
+
+  queryFoodItems(ledgerId: Ref<string>): ComputedRef<FoodMenuItem[]> {
+    return computed(() =>
+      this.foodItems.value.filter((f) => f.ledgerId === ledgerId.value && !f.deletedAt),
     );
   }
 
@@ -168,6 +176,18 @@ export class ServerProvider implements DataProvider {
     await this.req('DELETE', `/api/meals/${id}`);
     await this.reloadAll();
   }
+  async addFoodItem(f: FoodMenuItem): Promise<void> {
+    await this.req('POST', '/api/fooditems', f);
+    await this.reloadAll();
+  }
+  async updateFoodItem(f: FoodMenuItem): Promise<void> {
+    await this.req('PUT', `/api/fooditems/${f.id}`, f);
+    await this.reloadAll();
+  }
+  async deleteFoodItem(id: string): Promise<void> {
+    await this.req('DELETE', `/api/fooditems/${id}`);
+    await this.reloadAll();
+  }
 
   async saveSettings(patch: Partial<AppSettings>): Promise<void> {
     const merged = { ...this.settings.value, ...patch, id: SETTINGS_ID };
@@ -188,6 +208,7 @@ export class ServerProvider implements DataProvider {
       accounts: this.accounts.value,
       trips: this.trips.value,
       meals: this.meals.value,
+      foodItems: this.foodItems.value,
       settings: [this.settings.value],
     };
   }
@@ -205,13 +226,14 @@ export class ServerProvider implements DataProvider {
 
   // —— 内部 ——
   private async reloadAll(): Promise<void> {
-    const [ls, txs, cats, accs, trps, mls, sts] = await Promise.all([
+    const [ls, txs, cats, accs, trps, mls, fis, sts] = await Promise.all([
       this.req<Ledger[]>('GET', '/api/ledgers'),
       this.req<Transaction[]>('GET', '/api/transactions'),
       this.req<Category[]>('GET', '/api/categories'),
       this.req<Account[]>('GET', '/api/accounts'),
       this.req<TripRecord[]>('GET', '/api/trips'),
       this.req<MealRecord[]>('GET', '/api/meals'),
+      this.req<FoodMenuItem[]>('GET', '/api/fooditems'),
       this.req<AppSettings | null>('GET', '/api/settings'),
     ]);
     this.ledgers.value = ls ?? [];
@@ -220,6 +242,7 @@ export class ServerProvider implements DataProvider {
     this.accounts.value = accs ?? [];
     this.trips.value = trps ?? [];
     this.meals.value = mls ?? [];
+    this.foodItems.value = fis ?? [];
     this.settings.value = sts ?? { ...DEFAULT_SETTINGS };
   }
 

@@ -14,6 +14,7 @@ import type {
   Account,
   AppSettings,
   Category,
+  FoodMenuItem,
   Ledger,
   LedgerType,
   MealRecord,
@@ -87,6 +88,14 @@ export class DexieProvider implements DataProvider {
     return computed(() => (list.value ?? []).filter((m) => !m.deletedAt));
   }
 
+  queryFoodItems(ledgerId: Ref<string>): ComputedRef<FoodMenuItem[]> {
+    const list = useLiveQuery(
+      () => db.foodItems.where('ledgerId').equals(ledgerId.value).toArray(),
+      [ledgerId],
+    );
+    return computed(() => (list.value ?? []).filter((f) => !f.deletedAt));
+  }
+
   querySettings(): ComputedRef<AppSettings> {
     const s = useLiveQuery(() => db.settings.get(SETTINGS_ID), []);
     return computed<AppSettings>(() => s.value ?? { ...DEFAULT_SETTINGS });
@@ -125,7 +134,7 @@ export class DexieProvider implements DataProvider {
     const now = Date.now();
     await db.transaction(
       'rw',
-      [db.ledgers, db.transactions, db.categories, db.accounts, db.trips, db.meals],
+      [db.ledgers, db.transactions, db.categories, db.accounts, db.trips, db.meals, db.foodItems],
       async () => {
         await db.ledgers.update(id, { deletedAt: now });
         await db.transactions.where('ledgerId').equals(id).modify({ deletedAt: now });
@@ -133,6 +142,7 @@ export class DexieProvider implements DataProvider {
         await db.accounts.where('ledgerId').equals(id).modify({ deletedAt: now });
         await db.trips.where('ledgerId').equals(id).modify({ deletedAt: now });
         await db.meals.where('ledgerId').equals(id).modify({ deletedAt: now });
+        await db.foodItems.where('ledgerId').equals(id).modify({ deletedAt: now });
       },
     );
   }
@@ -177,6 +187,15 @@ export class DexieProvider implements DataProvider {
   async deleteMeal(id: string): Promise<void> {
     await db.meals.update(id, { deletedAt: Date.now() });
   }
+  async addFoodItem(f: FoodMenuItem): Promise<void> {
+    await db.foodItems.add(f);
+  }
+  async updateFoodItem(f: FoodMenuItem): Promise<void> {
+    await db.foodItems.put(f);
+  }
+  async deleteFoodItem(id: string): Promise<void> {
+    await db.foodItems.update(id, { deletedAt: Date.now() });
+  }
 
   async saveSettings(patch: Partial<AppSettings>): Promise<void> {
     await this.ensureSettings();
@@ -190,22 +209,24 @@ export class DexieProvider implements DataProvider {
   // —— 备份 / 同步 ——
   // 注意：exportAll 保留墓碑行（deletedAt 非空），以便同步把「删除」也下发给服务端。
   async exportAll(): Promise<SyncSnapshot> {
-    const [ledgers, transactions, categories, accounts, trips, meals, settings] = await Promise.all([
-      db.ledgers.toArray(),
-      db.transactions.toArray(),
-      db.categories.toArray(),
-      db.accounts.toArray(),
-      db.trips.toArray(),
-      db.meals.toArray(),
-      db.settings.toArray(),
-    ]);
-    return { ledgers, transactions, categories, accounts, trips, meals, settings };
+    const [ledgers, transactions, categories, accounts, trips, meals, foodItems, settings] =
+      await Promise.all([
+        db.ledgers.toArray(),
+        db.transactions.toArray(),
+        db.categories.toArray(),
+        db.accounts.toArray(),
+        db.trips.toArray(),
+        db.meals.toArray(),
+        db.foodItems.toArray(),
+        db.settings.toArray(),
+      ]);
+    return { ledgers, transactions, categories, accounts, trips, meals, foodItems, settings };
   }
 
   async importAll(s: SyncSnapshot): Promise<void> {
     await db.transaction(
       'rw',
-      [db.ledgers, db.transactions, db.categories, db.accounts, db.trips, db.meals, db.settings],
+      [db.ledgers, db.transactions, db.categories, db.accounts, db.trips, db.meals, db.foodItems, db.settings],
       async () => {
         await db.ledgers.clear();
         await db.transactions.clear();
@@ -213,6 +234,7 @@ export class DexieProvider implements DataProvider {
         await db.accounts.clear();
         await db.trips.clear();
         await db.meals.clear();
+        await db.foodItems.clear();
         await db.settings.clear();
         await db.ledgers.bulkAdd(s.ledgers);
         await db.transactions.bulkAdd(s.transactions);
@@ -220,6 +242,7 @@ export class DexieProvider implements DataProvider {
         await db.accounts.bulkAdd(s.accounts);
         if (s.trips.length) await db.trips.bulkAdd(s.trips);
         if (s.meals.length) await db.meals.bulkAdd(s.meals);
+        if (s.foodItems.length) await db.foodItems.bulkAdd(s.foodItems);
         if (s.settings.length) await db.settings.bulkAdd(s.settings);
       },
     );
@@ -270,6 +293,7 @@ export class DexieProvider implements DataProvider {
       accounts: r.accounts ?? 0,
       trips: r.trips ?? 0,
       meals: r.meals ?? 0,
+      foodItems: r.foodItems ?? 0,
       settings: r.settings ?? 0,
       syncedAt: r.syncedAt ?? Date.now(),
     };
@@ -309,6 +333,7 @@ export class DexieProvider implements DataProvider {
       accounts: snap.accounts.length,
       trips: snap.trips.length,
       meals: snap.meals.length,
+      foodItems: snap.foodItems.length,
       settings: snap.settings.length,
       syncedAt: Date.now(),
     };

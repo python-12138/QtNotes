@@ -12,6 +12,7 @@ public sealed class SyncPayload
     public List<Account> Accounts { get; set; } = new();
     public List<Trip> Trips { get; set; } = new();
     public List<Meal> Meals { get; set; } = new();
+    public List<FoodItem> FoodItems { get; set; } = new();
     public List<Setting> Settings { get; set; } = new();
 }
 
@@ -23,6 +24,7 @@ public sealed record SyncResult(
     int Accounts,
     int Trips,
     int Meals,
+    int FoodItems,
     int Settings,
     long SyncedAt);
 
@@ -54,9 +56,10 @@ public sealed class SyncService : ISyncService
         var accounts = await MirrorAsync(payload.Accounts, now);
         var trips = await MirrorAsync(payload.Trips, now);
         var meals = await MirrorAsync(payload.Meals, now);
+        var foodItems = await MirrorAsync(payload.FoodItems, now);
         var settings = await MirrorAsync(payload.Settings, now);
 
-        return new SyncResult(ledgers, transactions, categories, accounts, trips, meals, settings, now);
+        return new SyncResult(ledgers, transactions, categories, accounts, trips, meals, foodItems, settings, now);
     }
 
     /// <summary>
@@ -76,9 +79,10 @@ public sealed class SyncService : ISyncService
             var accounts = await ReplaceAsync(payload.Accounts, now);
             var trips = await ReplaceAsync(payload.Trips, now);
             var meals = await ReplaceAsync(payload.Meals, now);
+            var foodItems = await ReplaceAsync(payload.FoodItems, now);
             var settings = await ReplaceAsync(payload.Settings, now);
             _db.Ado.CommitTran();
-            return new SyncResult(ledgers, transactions, categories, accounts, trips, meals, settings, now);
+            return new SyncResult(ledgers, transactions, categories, accounts, trips, meals, foodItems, settings, now);
         }
         catch
         {

@@ -17,6 +17,7 @@ export function diffCandidates(current: SyncSnapshot, snap: SyncSnapshot): SyncS
     accounts: diffTable(current.accounts, snap.accounts),
     trips: diffTable(current.trips, snap.trips),
     meals: diffTable(current.meals, snap.meals),
+    foodItems: diffTable(current.foodItems, snap.foodItems),
     settings: diffTable(current.settings, snap.settings),
   };
 }
@@ -35,6 +36,7 @@ export function mergeSnapshots(snap: SyncSnapshot, retained: SyncSnapshot): Sync
     accounts: [...snap.accounts, ...retained.accounts],
     trips: [...snap.trips, ...retained.trips],
     meals: [...snap.meals, ...retained.meals],
+    foodItems: [...snap.foodItems, ...retained.foodItems],
     settings: [...snap.settings, ...retained.settings],
   };
 }

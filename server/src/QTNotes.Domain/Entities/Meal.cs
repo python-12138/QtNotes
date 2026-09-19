@@ -30,9 +30,16 @@ public class Meal : EntityBase
     /// <summary>热量（千卡）</summary>
     public double Kcal { get; set; }
 
-    /// <summary>压缩缩略图 dataURL（仅回显，可能较长，用 longtext）</summary>
+    /// <summary>压缩缩略图 dataURL（吃之前照片，仅回显，可能较长，用 longtext）</summary>
     [SugarColumn(ColumnDataType = "longtext", IsNullable = true)]
     public string? Image { get; set; }
+
+    /// <summary>吃结束后照片 dataURL（仅回显，可能较长，用 longtext）</summary>
+    [SugarColumn(ColumnDataType = "longtext", IsNullable = true)]
+    public string? AfterImage { get; set; }
+
+    /// <summary>吃结束后剩余热量（千卡），0 / null = 吃光</summary>
+    public double? RemainingKcal { get; set; }
 
     [SugarColumn(Length = 255)]
     public string Note { get; set; } = string.Empty;

@@ -135,6 +135,7 @@ async function deleteMeal(m: MealRecord) {
               <span>蛋白质 {{ formatGrams(m.protein) }}</span>
               <span>脂肪 {{ formatGrams(m.fat) }}</span>
               <b>{{ m.kcal }} kcal</b>
+              <span v-if="m.remainingKcal" class="meal-remaining">剩 {{ m.remainingKcal }} kcal</span>
             </div>
           </div>
           <button type="button" class="icon-btn danger meal-del" @click.stop="deleteMeal(m)">🗑</button>

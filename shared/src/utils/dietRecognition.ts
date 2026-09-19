@@ -11,6 +11,16 @@ const MAX_IMAGE_SIZE = 1024;
 /** 压缩质量 0~1，越小文件越小、越糊 */
 const JPEG_QUALITY = 0.8;
 
+/** 识别出的单样食物（用于沉淀进菜单） */
+export interface RecognizedFood {
+  name: string; // 食物名，如「米饭」
+  grams: number; // 本次份量（克）
+  carbs: number; // 碳水（克）
+  protein: number; // 蛋白质（克）
+  fat: number; // 脂肪（克）
+  kcal: number; // 热量（千卡）
+}
+
 /** 识别结果：字段名与要求模型返回的 JSON 一一对应 */
 export interface RecognitionResult {
   summary: string; // 食物描述，如「米饭 + 红烧肉 + 青菜」
@@ -18,13 +28,23 @@ export interface RecognitionResult {
   protein: number; // 蛋白质（克）
   fat: number; // 脂肪（克）
   kcal: number; // 热量（千卡）
+  foods?: RecognizedFood[]; // 每样食物的清单（用于「加入菜单」）
 }
 
+/** 识别场景：吃之前（整份）/ 吃结束后（剩余） */
+export type RecognitionScene = 'before' | 'after';
+
 /** 拼装提示词：hint 为用户补充描述，用于纠偏拍照距离带来的误识别（如鸡蛋被看成鹌鹑蛋） */
-function buildPrompt(hint: string): string {
+function buildPrompt(hint: string, scene: RecognitionScene): string {
+  const sceneText =
+    scene === 'after'
+      ? '图中是吃完后剩下的食物，请识别剩余部分'
+      : '识别图中全部食物';
   let p =
-    '你是营养估算助手。识别图中食物，只返回一个 JSON 对象，键为 summary/carbs/protein/fat/kcal，' +
-    'summary 是食物描述字符串，carbs/protein/fat 是克数、kcal 是千卡，均为目测估算数值。';
+    '你是营养估算助手。' + sceneText +
+    '，只返回一个 JSON 对象，键为 summary/carbs/protein/fat/kcal/foods，' +
+    'summary 是食物描述字符串，carbs/protein/fat 是克数、kcal 是千卡（均为整盘合计的目测估算数值），' +
+    'foods 是每样食物的数组，每项含 name（名称）/grams（克）/carbs/protein/fat/kcal（该项的营养）。';
   if (hint) {
     p +=
       '用户补充说明：「' + hint + '」。请优先以该说明为准判断食物种类与分量（例如用户已明确是鸡蛋，就不要识别成鹌鹑蛋）。';
@@ -73,11 +93,13 @@ export function compressImage(file: File, maxSize = MAX_IMAGE_SIZE): Promise<str
  * @param imageDataUrl compressImage 输出的 JPEG dataURL
  * @param apiKey DeepSeek API Key（用户自填）
  * @param hint 用户补充描述（选填），帮助模型纠偏拍照距离带来的误识别
+ * @param scene 吃之前（整份）/ 吃结束后（剩余）
  */
 export async function recognizeMeal(
   imageDataUrl: string,
   apiKey: string,
   hint = '',
+  scene: RecognitionScene = 'before',
 ): Promise<RecognitionResult> {
   if (!apiKey) throw new Error('未配置 DeepSeek API Key，请到「设置」里填写');
 
@@ -99,7 +121,7 @@ export async function recognizeMeal(
           {
             role: 'user',
             content: [
-              { type: 'text', text: buildPrompt(hint) },
+              { type: 'text', text: buildPrompt(hint, scene) },
               { type: 'image_url', image_url: { url: imageDataUrl } },
             ],
           },
@@ -148,6 +170,7 @@ function parseRecognition(text: string): RecognitionResult {
       protein: toNum(obj.protein),
       fat: toNum(obj.fat),
       kcal: toNum(obj.kcal),
+      foods: parseFoods(obj.foods),
     };
   } catch {
     // 模型没按 JSON 返回：用正则从文本里抠数值与描述，兜底
@@ -162,6 +185,24 @@ function parseRecognition(text: string): RecognitionResult {
       protein: grab('protein'),
       fat: grab('fat'),
       kcal: grab('kcal'),
+      foods: [],
     };
   }
+}
+
+/** 解析 foods 数组为规范结构；非数组/字段缺失时回退空数组，不阻断合计逻辑 */
+function parseFoods(foods: unknown): RecognizedFood[] {
+  if (!Array.isArray(foods)) return [];
+  const toNum = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  return foods
+    .filter((f): f is Record<string, unknown> => !!f && typeof f === 'object')
+    .map((f) => ({
+      name: typeof f.name === 'string' ? f.name : '',
+      grams: toNum(f.grams),
+      carbs: toNum(f.carbs),
+      protein: toNum(f.protein),
+      fat: toNum(f.fat),
+      kcal: toNum(f.kcal),
+    }))
+    .filter((f) => f.name !== '');
 }

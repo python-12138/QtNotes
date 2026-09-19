@@ -2,7 +2,7 @@
 // 手机端 = DexieProvider（IndexedDB）；电脑端 = ServerProvider（fetch 服务端 MySQL）。
 // store / 页面 / 组件一律通过 getDataProvider() 访问数据，不直接 import 具体数据源。
 import type { ComputedRef, Ref } from 'vue';
-import type { Account, AppSettings, Category, Ledger, LedgerType, MealRecord, Transaction, TripRecord } from '../types';
+import type { Account, AppSettings, Category, FoodMenuItem, Ledger, LedgerType, MealRecord, Transaction, TripRecord } from '../types';
 import type { SyncResult, SyncSnapshot } from './types';
 
 export interface DataProvider {
@@ -29,6 +29,7 @@ export interface DataProvider {
   queryAccounts(ledgerId: Ref<string>): ComputedRef<Account[]>;
   queryTrips(ledgerId: Ref<string>): ComputedRef<TripRecord[]>;
   queryMeals(ledgerId: Ref<string>): ComputedRef<MealRecord[]>;
+  queryFoodItems(ledgerId: Ref<string>): ComputedRef<FoodMenuItem[]>;
   querySettings(): ComputedRef<AppSettings>;
 
   // —— 写（实体对象由调用方构造好 id/createdAt 后传入） ——
@@ -48,6 +49,9 @@ export interface DataProvider {
   addMeal(m: MealRecord): Promise<void>;
   updateMeal(m: MealRecord): Promise<void>;
   deleteMeal(id: string): Promise<void>;
+  addFoodItem(f: FoodMenuItem): Promise<void>;
+  updateFoodItem(f: FoodMenuItem): Promise<void>;
+  deleteFoodItem(id: string): Promise<void>;
   saveSettings(patch: Partial<AppSettings>): Promise<void>;
   getSettings(): Promise<AppSettings>;
 

@@ -119,6 +119,7 @@ const editingMeal = ref<MealRecord | null>(null);
             <div class="meal-macros">
               <span>{{ dateLabel(m.date) }}</span>
               <b>{{ m.kcal }} kcal</b>
+              <span v-if="m.remainingKcal" class="meal-remaining">剩 {{ m.remainingKcal }} kcal</span>
             </div>
           </div>
         </div>
