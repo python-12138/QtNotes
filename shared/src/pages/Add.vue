@@ -239,11 +239,9 @@ function failDiet(e: unknown) {
   dietError.value = e instanceof Error ? e.message : '识别失败，请重试';
 }
 
-// 用当前图片 + 补充描述调识别，成功后自动填充（用户可再手动改）。
-// scene: 'before' 识别整份、'after' 识别剩余；最终摄入 = before − after。
-async function runRecognition(scene: 'before' | 'after') {
-  const image = scene === 'before' ? dietImage.value : dietAfterImage.value;
-  if (!image) return;
+// 统一识别：点一次自动识别已上传的照片。吃之前必有；若拍了吃结束后则顺带识别剩余并扣减。
+async function runAllRecognition() {
+  if (!dietImage.value) return;
   dietError.value = '';
   recognizing.value = true;
   try {
@@ -252,18 +250,21 @@ async function runRecognition(scene: 'before' | 'after') {
       dietError.value = '未配置 DeepSeek API Key，请到「我的」里填写';
       return;
     }
-    const hint = scene === 'before' ? dietHint.value.trim() : dietAfterHint.value.trim();
-    const r = await recognizeMeal(image, apiKey, hint, scene);
-    if (scene === 'before') {
-      beforeN.value = { carbs: r.carbs, protein: r.protein, fat: r.fat, kcal: r.kcal };
-      dietFoods.value = r.foods ?? [];
-      dietSummary.value = r.summary;
-      fillFromRecognition();
+    // 吃之前（必有）
+    const before = await recognizeMeal(dietImage.value, apiKey, dietHint.value.trim(), 'before');
+    beforeN.value = { carbs: before.carbs, protein: before.protein, fat: before.fat, kcal: before.kcal };
+    dietFoods.value = before.foods ?? [];
+    dietSummary.value = before.summary;
+    // 吃结束后（可选）：没拍则剩余记 0，等于默认吃光
+    if (dietAfterImage.value) {
+      const after = await recognizeMeal(dietAfterImage.value, apiKey, dietAfterHint.value.trim(), 'after');
+      afterN.value = { carbs: after.carbs, protein: after.protein, fat: after.fat, kcal: after.kcal };
+      remainingKcal.value = after.kcal;
     } else {
-      afterN.value = { carbs: r.carbs, protein: r.protein, fat: r.fat, kcal: r.kcal };
-      remainingKcal.value = r.kcal;
-      fillFromRecognition();
+      afterN.value = { carbs: 0, protein: 0, fat: 0, kcal: 0 };
+      remainingKcal.value = 0;
     }
+    fillFromRecognition();
   } catch (e) {
     failDiet(e);
   } finally {
@@ -406,6 +407,10 @@ function save() {
             <button type="button" class="btn" :disabled="recognizing" @click="cameraInput?.click()">📷 拍照</button>
             <button type="button" class="btn" :disabled="recognizing" @click="albumInput?.click()">🖼 相册</button>
           </div>
+          <div class="photo-slot">
+            <img v-if="dietImage" :src="dietImage" class="diet-photo-preview" alt="吃之前照片" />
+            <div v-else class="photo-placeholder">🍽 吃之前拍照</div>
+          </div>
           <input
             v-model="dietHint"
             type="text"
@@ -422,6 +427,10 @@ function save() {
             <button type="button" class="btn" :disabled="recognizing" @click="afterCameraInput?.click()">📷 拍照</button>
             <button type="button" class="btn" :disabled="recognizing" @click="afterAlbumInput?.click()">🖼 相册</button>
           </div>
+          <div class="photo-slot">
+            <img v-if="dietAfterImage" :src="dietAfterImage" class="diet-photo-preview" alt="吃结束后照片" />
+            <div v-else class="photo-placeholder">🫗 吃结束后拍照（可选，未拍则默认吃光）</div>
+          </div>
           <input
             v-model="dietAfterHint"
             type="text"
@@ -435,16 +444,9 @@ function save() {
         <div v-if="recognizing" class="hint">识别中…</div>
         <div v-else-if="dietError" class="diet-error">{{ dietError }}</div>
 
-        <div v-if="dietImage || dietAfterImage" class="diet-photo-dual">
-          <img v-if="dietImage" :src="dietImage" class="diet-photo-preview" alt="吃之前照片" />
-          <img v-if="dietAfterImage" :src="dietAfterImage" class="diet-photo-preview" alt="吃结束后照片" />
-        </div>
-
+        <!-- 统一识别：点一次自动识别已上传的照片（吃之前必有，吃结束后可选） -->
         <div v-if="dietImage" class="diet-photo-actions">
-          <button type="button" class="btn btn-sm" :disabled="recognizing" @click="runRecognition('before')">🔍 识别</button>
-        </div>
-        <div v-if="dietAfterImage" class="diet-photo-actions">
-          <button type="button" class="btn btn-sm" :disabled="recognizing" @click="runRecognition('after')">🔍 识别剩余</button>
+          <button type="button" class="btn btn-sm" :disabled="recognizing" @click="runAllRecognition()">🔍 识别</button>
         </div>
 
         <div v-if="remainingKcal > 0" class="hint">已扣减剩余 {{ remainingKcal }} kcal，下方为本次实际摄入</div>

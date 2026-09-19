@@ -1089,6 +1089,29 @@ body {
   margin-bottom: 16px;
 }
 
+/* 照片槽：有图显示预览，无图显示占位提示文字 */
+.photo-slot {
+  margin-top: 8px;
+}
+
+.photo-slot .diet-photo-preview {
+  margin-bottom: 8px;
+}
+
+.photo-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 96px;
+  padding: 12px;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
+  background: var(--bg);
+}
+
 .diet-macro-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
