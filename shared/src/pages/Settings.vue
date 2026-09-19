@@ -13,6 +13,7 @@ import { uid } from '../utils/id';
 import { getTheme, applyTheme, type Theme } from '../utils/theme';
 import { LEDGER_TYPE_LABELS } from '../presets';
 import { getDeepseekKey, setDeepseekKey } from '../utils/deepseekKey';
+import { ACTIVITY_OPTIONS } from '../utils/diet';
 import type { TxType } from '../types';
 import type { SyncSnapshot } from '../data/types';
 import { diffCandidates, mergeSnapshots } from '../utils/importDiff';
@@ -84,11 +85,13 @@ async function deleteFoodItem(id: string) {
 const bodySummary = computed(() => {
   const l = currentLedger.value;
   if (l?.gender == null) return '未填写';
+  const activityLabel = ACTIVITY_OPTIONS.find((o) => o.value === l.activityLevel)?.label.split('（')[0] ?? '';
   const parts = [
     l.gender === 'male' ? '男' : '女',
     l.age != null ? `${l.age}岁` : '',
     l.heightCm != null ? `${l.heightCm}cm` : '',
     l.weightKg != null ? `${l.weightKg}kg` : '',
+    activityLabel,
   ].filter(Boolean);
   return parts.join(' · ');
 });

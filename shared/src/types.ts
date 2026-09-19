@@ -11,6 +11,9 @@ export type LedgerType = 'general' | 'vehicle' | 'diet';
 export type Tab = 'home' | 'records' | 'stats' | 'settings';
 
 /** 账本（一本账一个独立记账空间） */
+/** 活动量等级（饮食账本，用于 BMR → TDEE 折算） */
+export type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active';
+
 export interface Ledger {
   id: string;
   name: string;
@@ -19,11 +22,17 @@ export interface Ledger {
   color: string; // hex
   createdAt: number;
   deletedAt?: number; // 软删除墓碑（毫秒时间戳），用于多端同步
-  // —— 饮食账本：身体信息（用于计算基础代谢 BMR）——
+  // —— 饮食账本：身体信息（用于计算基础代谢 BMR 与每日总消耗 TDEE）——
   gender?: 'male' | 'female'; // 性别
   age?: number; // 年龄（岁）
   heightCm?: number; // 身高（厘米）
   weightKg?: number; // 体重（公斤）
+  activityLevel?: ActivityLevel; // 活动量（缺省按久坐）
+  // —— 宏量目标参数（可调，缺省用推荐值）——
+  proteinPerKgNormal?: number; // 不健身蛋白质（g/kg 体重），默认 1.2
+  proteinPerKgFitness?: number; // 健身蛋白质（g/kg 体重），默认 1.8
+  fatRatioNormal?: number; // 不健身脂肪占比（0-1），默认 0.25
+  fatRatioFitness?: number; // 健身脂肪占比（0-1），默认 0.2
 }
 
 /** 流水（一笔账目） */

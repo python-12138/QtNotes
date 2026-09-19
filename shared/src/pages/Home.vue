@@ -8,9 +8,10 @@ import { useTransactions } from '../store/useTransactions';
 import { useMeals } from '../store/useMeals';
 import { formatMoney } from '../utils/money';
 import { currentMonthStr, dateLabel, todayStr } from '../utils/date';
-import { mealTypeLabel, formatGrams, calcBMR } from '../utils/diet';
+import { mealTypeLabel, formatGrams, calcTDEE, macroTargets, type FitnessMode } from '../utils/diet';
 import type { Transaction, MealRecord } from '../types';
 import TransactionItem from '../components/TransactionItem.vue';
+import MacroParamsModal from '../components/MacroParamsModal.vue';
 import Add from './Add.vue';
 
 const emit = defineEmits<{ (e: 'open-ledger'): void }>();
@@ -55,9 +56,33 @@ const todayNutrition = computed(() => {
   return { carbs, protein, fat, kcal };
 });
 
-// 基础代谢与今日热量盈余（未填身体信息时为 null）
-const bmr = computed(() => calcBMR(ledger.value ?? {}));
-const surplus = computed(() => (bmr.value != null ? todayNutrition.value.kcal - bmr.value : null));
+// 每日总消耗 TDEE 与今日热量盈余（未填身体信息时为 null）
+const tdee = computed(() => calcTDEE(ledger.value ?? {}));
+const surplus = computed(() => (tdee.value != null ? todayNutrition.value.kcal - tdee.value : null));
+
+// 健身 / 不健身切换 → 每日碳蛋脂目标
+const fitnessMode = ref<FitnessMode>('normal');
+const targets = computed(() => macroTargets(ledger.value ?? {}, fitnessMode.value));
+const showMacro = ref(false);
+
+// 距目标还差多少（正数 = 还差，负数 = 超出）
+const remaining = computed(() => {
+  const t = targets.value;
+  const have = todayNutrition.value;
+  if (t == null) return { carbs: 0, protein: 0, fat: 0, kcal: 0 };
+  return {
+    carbs: t.carbs - have.carbs,
+    protein: t.protein - have.protein,
+    fat: t.fat - have.fat,
+    kcal: t.kcal - have.kcal,
+  };
+});
+
+// 差值文案：还差 Xg / 超出 Xg（或 kcal）
+function diffText(v: number, unit: 'g' | 'kcal'): string {
+  const abs = unit === 'g' ? formatGrams(Math.abs(v)) : `${Math.round(Math.abs(v))} kcal`;
+  return v >= 0 ? `还差 ${abs}` : `超出 ${abs}`;
+}
 
 const recentMeals = computed(() => meals.value.slice(0, 10));
 
@@ -103,6 +128,51 @@ const editingMeal = ref<MealRecord | null>(null);
             <b>{{ formatGrams(todayNutrition.fat) }}</b>
           </div>
         </div>
+
+        <!-- 横线分割：建议摄入（健身 / 不健身切换 + 参数调整 + 还差多少） -->
+        <div v-if="targets != null" class="macro-target">
+          <div class="macro-target-head">
+            <span class="macro-target-title">建议摄入</span>
+            <div class="macro-target-actions">
+              <div class="fitness-toggle">
+                <button
+                  type="button"
+                  :class="{ active: fitnessMode === 'normal' }"
+                  @click="fitnessMode = 'normal'"
+                >不健身</button>
+                <button
+                  type="button"
+                  :class="{ active: fitnessMode === 'fitness' }"
+                  @click="fitnessMode = 'fitness'"
+                >健身</button>
+              </div>
+              <button type="button" class="macro-gear" title="调整参数" @click="showMacro = true">⚙️</button>
+            </div>
+          </div>
+          <div class="macro-rows">
+            <div class="macro-row">
+              <span class="macro-row-name">碳水</span>
+              <span class="macro-row-target">{{ formatGrams(targets.carbs) }}</span>
+              <em :class="remaining.carbs >= 0 ? 'diff-under' : 'diff-over'">{{ diffText(remaining.carbs, 'g') }}</em>
+            </div>
+            <div class="macro-row">
+              <span class="macro-row-name">蛋白质</span>
+              <span class="macro-row-target">{{ formatGrams(targets.protein) }}</span>
+              <em :class="remaining.protein >= 0 ? 'diff-under' : 'diff-over'">{{ diffText(remaining.protein, 'g') }}</em>
+            </div>
+            <div class="macro-row">
+              <span class="macro-row-name">脂肪</span>
+              <span class="macro-row-target">{{ formatGrams(targets.fat) }}</span>
+              <em :class="remaining.fat >= 0 ? 'diff-under' : 'diff-over'">{{ diffText(remaining.fat, 'g') }}</em>
+            </div>
+            <div class="macro-row">
+              <span class="macro-row-name">热量</span>
+              <span class="macro-row-target">{{ targets.kcal }} kcal</span>
+              <em :class="remaining.kcal >= 0 ? 'diff-under' : 'diff-over'">{{ diffText(remaining.kcal, 'kcal') }}</em>
+            </div>
+          </div>
+        </div>
+        <div v-else class="hint macro-target-hint">填写身体信息后，这里会显示每日建议摄入的碳蛋脂</div>
       </section>
 
       <section class="card recent">
@@ -159,5 +229,8 @@ const editingMeal = ref<MealRecord | null>(null);
     <!-- 编辑层（复用 Add 表单，回填后保存） -->
     <Add v-if="editingTx" :edit-tx="editingTx" @close="editingTx = null" />
     <Add v-if="editingMeal" :edit-meal="editingMeal" @close="editingMeal = null" />
+
+    <!-- 营养目标参数弹窗 -->
+    <MacroParamsModal v-if="showMacro" @close="showMacro = false" />
   </div>
 </template>

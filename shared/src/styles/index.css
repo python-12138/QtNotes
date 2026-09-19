@@ -1248,6 +1248,115 @@ body {
   margin-bottom: 14px;
 }
 
+/* 首页「今日摄入」卡片：建议摄入区块（横线分割 + 健身/不健身切换） */
+.macro-target {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.macro-target-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.macro-target-title {
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.95;
+}
+
+.fitness-toggle {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.fitness-toggle button {
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  opacity: 0.85;
+}
+
+.fitness-toggle button.active {
+  background: #fff;
+  color: #ea580c;
+  font-weight: 600;
+  opacity: 1;
+}
+
+.macro-target-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.macro-gear {
+  border: none;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.macro-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.macro-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.macro-row-name {
+  width: 48px;
+  opacity: 0.9;
+}
+
+.macro-row-target {
+  font-weight: 600;
+  flex: 1;
+}
+
+.macro-row em {
+  font-style: normal;
+  font-size: 12px;
+}
+
+.diff-under {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.diff-over {
+  color: #fde047;
+  font-weight: 700;
+}
+
+.macro-target-hint {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.9);
+}
+
 /* 吃之前 / 吃结束后双图并排 */
 .diet-photo-dual {
   display: grid;

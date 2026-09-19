@@ -1,8 +1,10 @@
 <script setup lang="ts">
-// 身体信息弹窗（饮食账本专用）：性别 / 年龄 / 身高 / 体重，用于计算基础代谢 BMR
+// 身体信息弹窗（饮食账本专用）：性别 / 年龄 / 身高 / 体重 / 活动量，用于计算基础代谢 BMR 与每日总消耗 TDEE
 import { ref, watch } from 'vue';
 import { useCurrentLedger } from '../store/currentLedger';
 import { getDataProvider } from '../data/provider';
+import { ACTIVITY_OPTIONS } from '../utils/diet';
+import type { ActivityLevel } from '../types';
 
 const emit = defineEmits<{ (e: 'close'): void }>();
 
@@ -11,6 +13,7 @@ const gender = ref<'male' | 'female'>('male');
 const age = ref('');
 const heightCm = ref('');
 const weightKg = ref('');
+const activityLevel = ref<ActivityLevel>('sedentary');
 
 watch(
   ledger,
@@ -19,6 +22,7 @@ watch(
     age.value = l?.age != null ? String(l.age) : '';
     heightCm.value = l?.heightCm != null ? String(l.heightCm) : '';
     weightKg.value = l?.weightKg != null ? String(l.weightKg) : '';
+    activityLevel.value = l?.activityLevel ?? 'sedentary';
   },
   { immediate: true },
 );
@@ -39,6 +43,7 @@ async function save() {
     age: Math.round(ageNum),
     heightCm: heightNum,
     weightKg: weightNum,
+    activityLevel: activityLevel.value,
   });
   emit('close');
 }
@@ -52,7 +57,7 @@ async function save() {
         <button type="button" class="icon-btn" @click="emit('close')">✕</button>
       </div>
       <div class="modal-body">
-        <p class="hint">用于计算基础代谢（BMR），进而算出每日热量盈余。</p>
+        <p class="hint">用于计算基础代谢（BMR）与每日总消耗（TDEE），进而给出每日碳蛋脂目标。</p>
         <div class="add-field">
           <label>性别</label>
           <div class="account-chips">
@@ -71,6 +76,21 @@ async function save() {
         <div class="add-field">
           <label>体重（kg）</label>
           <input v-model="weightKg" class="text-input" type="text" inputmode="decimal" placeholder="如 65" />
+        </div>
+        <div class="add-field">
+          <label>活动量</label>
+          <div class="account-chips">
+            <button
+              v-for="o in ACTIVITY_OPTIONS"
+              :key="o.value"
+              type="button"
+              class="chip"
+              :class="{ active: activityLevel === o.value }"
+              @click="activityLevel = o.value"
+            >
+              {{ o.label }}
+            </button>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
