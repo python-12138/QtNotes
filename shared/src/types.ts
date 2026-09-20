@@ -28,11 +28,13 @@ export interface Ledger {
   heightCm?: number; // 身高（厘米）
   weightKg?: number; // 体重（公斤）
   activityLevel?: ActivityLevel; // 活动量（缺省按久坐）
-  // —— 宏量目标参数（可调，缺省用推荐值）——
-  proteinPerKgNormal?: number; // 不健身蛋白质（g/kg 体重），默认 1.2
-  proteinPerKgFitness?: number; // 健身蛋白质（g/kg 体重），默认 1.8
-  fatRatioNormal?: number; // 不健身脂肪占比（0-1），默认 0.25
-  fatRatioFitness?: number; // 健身脂肪占比（0-1），默认 0.2
+  // —— 宏量目标参数（可调，缺省用推荐值；fitness=增肌，normal=降脂）——
+  proteinPerKgNormal?: number; // 降脂蛋白质（g/kg 体重），默认 1.2
+  proteinPerKgFitness?: number; // 增肌蛋白质（g/kg 体重），默认 1.8
+  fatRatioNormal?: number; // 降脂脂肪占比（0-1），默认 0.25
+  fatRatioFitness?: number; // 增肌脂肪占比（0-1），默认 0.2
+  calorieSurplusFitness?: number; // 增肌热量盈余（kcal），默认 300
+  calorieDeficitNormal?: number; // 降脂热量缺口（kcal），默认 500
 }
 
 /** 流水（一笔账目） */

@@ -50,6 +50,8 @@ export interface BodyProfile {
   proteinPerKgFitness?: number;
   fatRatioNormal?: number;
   fatRatioFitness?: number;
+  calorieSurplusFitness?: number;
+  calorieDeficitNormal?: number;
 }
 
 /** 基础代谢 BMR（千卡/天），Mifflin-St Jeor 公式；信息不完整或非法返回 null */
@@ -85,18 +87,21 @@ export function calcTDEE(profile: BodyProfile): number | null {
   return Math.round(bmr * factor);
 }
 
-/** 健身 / 不健身两档（用于碳蛋脂目标） */
+/** 增肌 / 降脂两档（用于碳蛋脂目标；fitness=增肌，normal=降脂） */
 export type FitnessMode = 'fitness' | 'normal';
 
 /** 宏量目标参数的推荐默认值（用户未自定义时使用） */
 export const MACRO_DEFAULTS = {
-  proteinPerKgNormal: 1.2, // 不健身蛋白质 g/kg
-  proteinPerKgFitness: 1.8, // 健身蛋白质 g/kg
-  fatRatioNormal: 0.25, // 不健身脂肪占比
-  fatRatioFitness: 0.2, // 健身脂肪占比
+  proteinPerKgNormal: 1.2, // 降脂蛋白质 g/kg
+  proteinPerKgFitness: 1.8, // 增肌蛋白质 g/kg
+  fatRatioNormal: 0.25, // 降脂脂肪占比
+  fatRatioFitness: 0.2, // 增肌脂肪占比
+  calorieSurplusFitness: 300, // 增肌热量盈余 kcal
+  calorieDeficitNormal: 500, // 降脂热量缺口 kcal
 };
 
-/** 每日宏量目标（碳水/蛋白/脂肪克数 + 目标热量），按健身/不健身与可调参数给出；信息不完整返回 null */
+/** 每日宏量目标（碳水/蛋白/脂肪克数 + 目标热量），按增肌/降脂与可调参数给出；信息不完整返回 null。
+ *  增肌目标热量 = TDEE + 盈余（默认 +300）；降脂目标热量 = TDEE − 缺口（默认 −500）。 */
 export function macroTargets(profile: BodyProfile, mode: FitnessMode): Nutrition | null {
   const tdee = calcTDEE(profile);
   const weightKg = profile.weightKg;
@@ -109,12 +114,18 @@ export function macroTargets(profile: BodyProfile, mode: FitnessMode): Nutrition
     mode === 'fitness'
       ? profile.fatRatioFitness ?? MACRO_DEFAULTS.fatRatioFitness
       : profile.fatRatioNormal ?? MACRO_DEFAULTS.fatRatioNormal;
+  // 目标热量：增肌加盈余、降脂减缺口
+  const adjust =
+    mode === 'fitness'
+      ? profile.calorieSurplusFitness ?? MACRO_DEFAULTS.calorieSurplusFitness
+      : -(profile.calorieDeficitNormal ?? MACRO_DEFAULTS.calorieDeficitNormal);
+  const targetKcal = Math.round(tdee + adjust);
   const protein = round1(weightKg * proteinPerKg);
-  const fat = round1((tdee * fatRatio) / 9);
+  const fat = round1((targetKcal * fatRatio) / 9);
   // 碳水 = 剩余热量（碳水 4 kcal/g，蛋白 4 kcal/g，脂肪 9 kcal/g）
-  const carbsKcal = tdee - protein * 4 - fat * 9;
+  const carbsKcal = targetKcal - protein * 4 - fat * 9;
   const carbs = round1(Math.max(0, carbsKcal) / 4);
-  return { carbs, protein, fat, kcal: tdee };
+  return { carbs, protein, fat, kcal: targetKcal };
 }
 
 /** 营养四要素（克/千卡），供「按每 100g 折算」的纯函数复用 */

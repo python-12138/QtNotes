@@ -60,7 +60,7 @@ const todayNutrition = computed(() => {
 const tdee = computed(() => calcTDEE(ledger.value ?? {}));
 const surplus = computed(() => (tdee.value != null ? todayNutrition.value.kcal - tdee.value : null));
 
-// 健身 / 不健身切换 → 每日碳蛋脂目标
+// 增肌 / 降脂切换 → 每日碳蛋脂目标
 const fitnessMode = ref<FitnessMode>('normal');
 const targets = computed(() => macroTargets(ledger.value ?? {}, fitnessMode.value));
 const showMacro = ref(false);
@@ -129,7 +129,7 @@ const editingMeal = ref<MealRecord | null>(null);
           </div>
         </div>
 
-        <!-- 横线分割：建议摄入（健身 / 不健身切换 + 参数调整 + 还差多少） -->
+        <!-- 横线分割：建议摄入（增肌 / 降脂切换 + 参数调整 + 还差多少） -->
         <div v-if="targets != null" class="macro-target">
           <div class="macro-target-head">
             <span class="macro-target-title">建议摄入</span>
@@ -139,12 +139,12 @@ const editingMeal = ref<MealRecord | null>(null);
                   type="button"
                   :class="{ active: fitnessMode === 'normal' }"
                   @click="fitnessMode = 'normal'"
-                >不健身</button>
+                >降脂</button>
                 <button
                   type="button"
                   :class="{ active: fitnessMode === 'fitness' }"
                   @click="fitnessMode = 'fitness'"
-                >健身</button>
+                >增肌</button>
               </div>
               <button type="button" class="macro-gear" title="调整参数" @click="showMacro = true">⚙️</button>
             </div>
