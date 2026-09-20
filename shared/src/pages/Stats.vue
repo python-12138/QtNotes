@@ -94,9 +94,10 @@ const totals = computed(() => {
 });
 
 // —— 油费综合：累计油钱 / 总里程 / 每公里成本 / 价格反推平均油耗 ——
+// 注意：油耗「综合」为累计值，始终用全量流水，不受顶部日期区间筛选影响。
 const fuelCategoryIds = computed(() => categories.value.filter((c) => c.isFuel).map((c) => c.id));
 const fuelRecordsAsc = computed(() =>
-  rangeTx.value
+  transactions.value
     .filter((t) => fuelCategoryIds.value.includes(t.categoryId))
     .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt)
     .map((t) => ({ amount: t.amount, km: t.km })),
@@ -115,8 +116,9 @@ const fuelLitersText = computed(() =>
 );
 
 // —— 每次行驶：累计行驶里程 / 累计行驶升数 / 平均油耗 / 每公里使用成本 ——
+// 注意：累计/综合油耗同样用全量行驶记录，不受日期区间筛选影响。
 const tripsAsc = computed(() =>
-  [...rangeTrips.value].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt),
+  [...trips.value].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt),
 );
 const tripSummary = computed(() => summarizeTrips(tripsAsc.value, unitPrice.value));
 
