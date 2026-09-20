@@ -12,6 +12,7 @@ import { useCurrentLedger } from '../store/currentLedger';
 import { formatMoney } from '../utils/money';
 import { dateLabel, weekdayLabel, monthLabel, shiftMonth, currentMonthStr } from '../utils/date';
 import { mealTypeLabel, formatGrams } from '../utils/diet';
+import { confirmDialog } from '../utils/dialog';
 import type { Transaction, MealRecord } from '../types';
 import TransactionItem from '../components/TransactionItem.vue';
 import Add from './Add.vue';
@@ -74,7 +75,7 @@ function metaFor(t: Transaction): string {
 }
 
 async function deleteTx(t: Transaction) {
-  if (!confirm('删除这笔记录？')) return;
+  if (!(await confirmDialog({ type: 'warning', title: '删除记录', message: '确定删除这笔记录？' }))) return;
   await getDataProvider().deleteTransaction(t.id);
 }
 
@@ -101,7 +102,7 @@ function dayKcal(items: MealRecord[]): number {
 }
 
 async function deleteMeal(m: MealRecord) {
-  if (!confirm('删除这条饮食记录？')) return;
+  if (!(await confirmDialog({ type: 'warning', title: '删除饮食记录', message: '确定删除这条饮食记录？' }))) return;
   await getDataProvider().deleteMeal(m.id);
 }
 </script>

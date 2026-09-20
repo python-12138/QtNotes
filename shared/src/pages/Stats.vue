@@ -14,6 +14,7 @@ import { useSettings } from '../store/useSettings';
 import { formatMoney } from '../utils/money';
 import { summarizeFuel, summarizeTrips, formatConsumption, formatCostPerKm } from '../utils/vehicle';
 import { summarizeMealsByDay, formatGrams, calcBMR } from '../utils/diet';
+import { confirmDialog } from '../utils/dialog';
 import type { TxType, TripRecord } from '../types';
 import Add from './Add.vue';
 
@@ -125,7 +126,7 @@ const tripSummary = computed(() => summarizeTrips(tripsAsc.value, unitPrice.valu
 // 每次行驶列表（最新在前）
 const tripListDesc = computed(() => [...tripSummary.value.list].reverse());
 async function deleteTrip(id: string) {
-  if (!confirm('删除这条行驶记录？')) return;
+  if (!(await confirmDialog({ type: 'warning', title: '删除行驶记录', message: '确定删除这条行驶记录？' }))) return;
   await getDataProvider().deleteTrip(id);
 }
 

@@ -35,7 +35,7 @@ export interface RecognitionResult {
 export type RecognitionScene = 'before' | 'after';
 
 /** 拼装提示词：hint 为用户补充描述，用于纠偏拍照距离带来的误识别（如鸡蛋被看成鹌鹑蛋） */
-function buildPrompt(hint: string, scene: RecognitionScene): string {
+function buildPrompt(hint: string, scene: RecognitionScene, heightCm?: number): string {
   const sceneText =
     scene === 'after'
       ? '图中是吃完后剩下的食物，请识别剩余部分'
@@ -48,6 +48,9 @@ function buildPrompt(hint: string, scene: RecognitionScene): string {
   if (hint) {
     p +=
       '用户补充说明：「' + hint + '」。请优先以该说明为准判断食物种类与分量（例如用户已明确是鸡蛋，就不要识别成鹌鹑蛋）。';
+  }
+  if (heightCm && heightCm > 0) {
+    p += `拍照时摄像头距食物约 ${heightCm} 厘米，请据此更准确地估算食物分量。`;
   }
   p += '不要输出任何多余文字、解释或代码块。';
   return p;
@@ -94,12 +97,14 @@ export function compressImage(file: File, maxSize = MAX_IMAGE_SIZE): Promise<str
  * @param apiKey DeepSeek API Key（用户自填）
  * @param hint 用户补充描述（选填），帮助模型纠偏拍照距离带来的误识别
  * @param scene 吃之前（整份）/ 吃结束后（剩余）
+ * @param heightCm 拍摄时摄像头距食物的距离（厘米，选填）；缺省或 <=0 时不下发，模型按默认目测
  */
 export async function recognizeMeal(
   imageDataUrl: string,
   apiKey: string,
   hint = '',
   scene: RecognitionScene = 'before',
+  heightCm?: number,
 ): Promise<RecognitionResult> {
   if (!apiKey) throw new Error('未配置 DeepSeek API Key，请到「设置」里填写');
 
@@ -121,7 +126,7 @@ export async function recognizeMeal(
           {
             role: 'user',
             content: [
-              { type: 'text', text: buildPrompt(hint, scene) },
+              { type: 'text', text: buildPrompt(hint, scene, heightCm) },
               { type: 'image_url', image_url: { url: imageDataUrl } },
             ],
           },

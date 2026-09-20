@@ -83,6 +83,8 @@ const dietImage = ref(props.editMeal?.image ?? ''); // 吃之前照片 dataURL�
 const dietAfterImage = ref(props.editMeal?.afterImage ?? ''); // 吃结束后照片 dataURL（仅回显）
 const dietHint = ref(''); // 吃之前补充描述（选填，帮助模型判断食物种类，如「这是鸡蛋」）
 const dietAfterHint = ref(''); // 吃结束后补充描述（选填）
+const dietHeight = ref(''); // 吃之前拍摄高度（cm，选填，借助测距仪测；留空则不传给模型）
+const dietAfterHeight = ref(''); // 吃结束后拍摄高度（cm，选填）
 const recognizing = ref(false); // 识别中：禁用按钮 + 显示提示
 const dietError = ref(''); // 识别错误信息
 const dietFoods = ref<RecognizedFood[]>([]); // 吃之前识别出的每样食物（用于「加入菜单」）
@@ -251,13 +253,13 @@ async function runAllRecognition() {
       return;
     }
     // 吃之前（必有）
-    const before = await recognizeMeal(dietImage.value, apiKey, dietHint.value.trim(), 'before');
+    const before = await recognizeMeal(dietImage.value, apiKey, dietHint.value.trim(), 'before', numOf(dietHeight.value));
     beforeN.value = { carbs: before.carbs, protein: before.protein, fat: before.fat, kcal: before.kcal };
     dietFoods.value = before.foods ?? [];
     dietSummary.value = before.summary;
     // 吃结束后（可选）：没拍则剩余记 0，等于默认吃光
     if (dietAfterImage.value) {
-      const after = await recognizeMeal(dietAfterImage.value, apiKey, dietAfterHint.value.trim(), 'after');
+      const after = await recognizeMeal(dietAfterImage.value, apiKey, dietAfterHint.value.trim(), 'after', numOf(dietAfterHeight.value));
       afterN.value = { carbs: after.carbs, protein: after.protein, fat: after.fat, kcal: after.kcal };
       remainingKcal.value = after.kcal;
     } else {
@@ -417,6 +419,13 @@ function save() {
             class="text-input diet-hint"
             placeholder="补充描述（可选，如：这是鸡蛋）"
           />
+          <input
+            v-model="dietHeight"
+            type="number"
+            inputmode="decimal"
+            class="text-input diet-hint"
+            placeholder="拍摄高度 cm（可选，可用测距仪测）"
+          />
           <input ref="cameraInput" type="file" accept="image/*" capture="environment" style="display: none" @change="onCameraChange($event, 'before')" />
           <input ref="albumInput" type="file" accept="image/*" style="display: none" @change="onCameraChange($event, 'before')" />
         </div>
@@ -436,6 +445,13 @@ function save() {
             type="text"
             class="text-input diet-hint"
             placeholder="补充描述（可选）"
+          />
+          <input
+            v-model="dietAfterHeight"
+            type="number"
+            inputmode="decimal"
+            class="text-input diet-hint"
+            placeholder="拍摄高度 cm（可选）"
           />
           <input ref="afterCameraInput" type="file" accept="image/*" capture="environment" style="display: none" @change="onCameraChange($event, 'after')" />
           <input ref="afterAlbumInput" type="file" accept="image/*" style="display: none" @change="onCameraChange($event, 'after')" />

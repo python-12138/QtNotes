@@ -795,6 +795,45 @@ body {
   padding-top: 12px;
 }
 
+/* 通用确认弹窗 */
+.confirm-dialog {
+  align-items: center;
+  text-align: center;
+  padding: 24px 20px 20px;
+}
+
+.confirm-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  font-size: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.confirm-title {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.confirm-message {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 20px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
 .form-label {
   font-size: 13px;
   color: var(--text-secondary);

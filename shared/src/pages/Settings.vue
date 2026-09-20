@@ -14,6 +14,7 @@ import { getTheme, applyTheme, type Theme } from '../utils/theme';
 import { LEDGER_TYPE_LABELS } from '../presets';
 import { getDeepseekKey, setDeepseekKey } from '../utils/deepseekKey';
 import { ACTIVITY_OPTIONS } from '../utils/diet';
+import { confirmDialog } from '../utils/dialog';
 import type { TxType } from '../types';
 import type { SyncSnapshot } from '../data/types';
 import { diffCandidates, mergeSnapshots } from '../utils/importDiff';
@@ -79,7 +80,7 @@ async function addFoodItem() {
 }
 
 async function deleteFoodItem(id: string) {
-  if (!confirm('删除该食物？')) return;
+  if (!(await confirmDialog({ type: 'warning', title: '删除食物', message: '确定从菜单删除该食物？' }))) return;
   await getDataProvider().deleteFoodItem(id);
 }
 const bodySummary = computed(() => {
@@ -155,7 +156,7 @@ async function deleteCategory(id: string) {
     alert('该分类下已有账单，无法删除');
     return;
   }
-  if (!confirm('确定删除该分类？')) return;
+  if (!(await confirmDialog({ type: 'warning', title: '删除分类', message: '确定删除该分类？' }))) return;
   await getDataProvider().deleteCategory(id);
 }
 
@@ -177,7 +178,7 @@ async function deleteAccount(id: string) {
     alert('该账户下已有账单，无法删除');
     return;
   }
-  if (!confirm('确定删除该账户？')) return;
+  if (!(await confirmDialog({ type: 'warning', title: '删除账户', message: '确定删除该账户？' }))) return;
   await getDataProvider().deleteAccount(id);
 }
 
@@ -282,7 +283,7 @@ async function onImportFile(file: File) {
     showImportConfirm.value = true;
   } else {
     // 手机端：确认后覆盖本机
-    if (!confirm('导入将覆盖当前所有数据，确定继续？')) return;
+    if (!(await confirmDialog({ type: 'error', title: '覆盖导入', message: '导入将覆盖当前所有数据，确定继续？' }))) return;
     await doImport(snap);
   }
 }
@@ -329,7 +330,7 @@ async function syncToServer() {
 // —— 从电脑还原（反向：电脑端服务 → 手机，覆盖本机）——
 async function restoreFromServer() {
   if (promptServer() == null) return;
-  if (!confirm('从电脑还原将覆盖本机所有数据，确定继续？')) return;
+  if (!(await confirmDialog({ type: 'error', title: '从电脑还原', message: '从电脑还原将覆盖本机所有数据，确定继续？' }))) return;
   try {
     const r = await getDataProvider().restoreFromServer();
     await ensureSettings();
